@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<bulkstamping>
+  <applicationType>43</applicationType>
+  <instrument>
+    <refNo>REF43-SAMPLE-001</refNo>
+    <instrumentDate>01/03/2026</instrumentDate>
+    <instrumentDateReceive></instrumentDateReceive>
+    <principal>-1</principal>
+    <subsidiary></subsidiary>
+    <typeOfInstrument>123</typeOfInstrument>
+    <typeOfInstrumentOthers>Loan Agreement</typeOfInstrumentOthers>
+    <transferor>
+      <type>0</type>
+      <name>Ali Example</name>
+      <nationality>1</nationality>
+      <icNo>900101011234</icNo>
+      <pasportNo></pasportNo>
+      <pasportCountry></pasportCountry>
+      <rocNo></rocNo>
+      <busType></busType>
+      <incomeTaxNo>TIN123</incomeTaxNo>
+      <incomeTaxBranch>001</incomeTaxBranch>
+      <street1>123 Main Street</street1>
+      <street2>Unit 10</street2>
+      <street3></street3>
+      <postcode>50000</postcode>
+      <city>Kuala Lumpur</city>
+      <state>14</state>
+      <country>458</country>
+      <telNo>+60 12-3456789</telNo>
+      <email>ali@example.com</email>
+    </transferor>
+    <transferee>
+      <type>0</type>
+      <name>Siti Example</name>
+      <nationality>1</nationality>
+      <icNo>910202021234</icNo>
+      <pasportNo></pasportNo>
+      <pasportCountry></pasportCountry>
+      <rocNo></rocNo>
+      <busType></busType>
+      <incomeTaxNo>TIN456</incomeTaxNo>
+      <incomeTaxBranch>002</incomeTaxBranch>
+      <street1>456 Market Road</street1>
+      <street2>Level 2</street2>
+      <street3></street3>
+      <postcode>50450</postcode>
+      <city>Kuala Lumpur</city>
+      <state>14</state>
+      <country>458</country>
+      <telNo>+60 13-9876543</telNo>
+      <email>siti@example.com</email>
+    </transferee>
+    <consideration>1000.50</consideration>
+    <duration>1</duration>
+    <durationDesc>12 months</durationDesc>
+    <colLand>2</colLand>
+    <colLandDesc></colLandDesc>
+    <colShare>2</colShare>
+    <colDeposit>2</colDeposit>
+    <colOthers>2</colOthers>
+    <colOthersDesc></colOthersDesc>
+    <noOfCopy></noOfCopy>
+    <exemption></exemption>
+    <exemptionOthers></exemptionOthers>
+    <remession></remession>
+    <remessionOthers></remessionOthers>
+    <attachment name="sample.pdf">U2FtcGxlIGF0dGFjaG1lbnQgY29udGVudA==</attachment>
+  </instrument>
+</bulkstamping>

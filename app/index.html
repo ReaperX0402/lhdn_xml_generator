@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>e-Duti Setem XML Generator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>e-Duti Setem XML Generator</h1>
+      <p>Generate browser-only XML files for bulk stamping applications.</p>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="panel compact">
+      <h2>Application Type</h2>
+      <label class="field single-field">
+        <span>Application Type required</span>
+        <select id="applicationType"></select>
+        <span class="field-error" data-error-for="applicationType"></span>
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>General Information</h2>
+      <div id="generalFields" class="field-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <h2>Transferor(s)</h2>
+        <button type="button" id="addTransferor" class="secondary">Add Transferor</button>
+      </div>
+      <div id="transferors" class="stack"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <h2>Transferee(s)</h2>
+        <button type="button" id="addTransferee" class="secondary">Add Transferee</button>
+      </div>
+      <div id="transferees" class="stack"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Instrument Information</h2>
+      <div id="instrumentFields" class="field-grid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Exemption / Remission</h2>
+      <div id="exemptionFields" class="field-grid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Attachments</h2>
+      <div class="upload-row">
+        <label class="upload-button" for="attachmentInput">Upload Attachment</label>
+        <input id="attachmentInput" type="file" multiple accept=".pdf,.jpeg,.jpg,.png,.gif">
+        <span class="hint">PDF, JPEG, JPG, PNG or GIF. At least one attachment is required.</span>
+      </div>
+      <div id="attachmentMessages" class="message-stack"></div>
+      <ul id="attachmentList" class="attachment-list"></ul>
+    </section>
+
+    <section class="panel preview-panel">
+      <div class="section-header">
+        <h2>XML Preview</h2>
+        <div class="button-row">
+          <button type="button" id="previewXml">Preview XML</button>
+          <button type="button" id="downloadXml" disabled>Download XML</button>
+          <button type="button" id="clearForm" class="secondary">Clear Form</button>
+        </div>
+      </div>
+      <textarea id="xmlPreview" readonly spellcheck="false" placeholder="XML preview appears here after validation passes."></textarea>
+    </section>
+
+    <aside class="panel status-panel" id="complianceStatus" aria-live="polite"></aside>
+  </main>
+
+  <script src="field-config.js"></script>
+  <script src="sanitizer.js"></script>
+  <script src="file-handler.js"></script>
+  <script src="validation.js"></script>
+  <script src="xml-generator.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
