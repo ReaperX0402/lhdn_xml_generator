@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>e-Duti XML Generator Tests</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #1f2933; background: #f5f7fa; }
+    h1 { margin-top: 0; }
+    #summary { padding: 12px 14px; border-radius: 6px; background: #fff; border: 1px solid #d7dee8; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; background: #fff; }
+    th, td { border: 1px solid #d7dee8; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef3f8; }
+    .pass { color: #146c43; font-weight: 700; }
+    .fail { color: #b42318; font-weight: 700; }
+    pre { white-space: pre-wrap; margin: 0; }
+  </style>
+</head>
+<body>
+  <h1>e-Duti XML Generator Automated Tests</h1>
+  <p id="summary">Running tests...</p>
+  <p>Browser console rerun: <code>window.runEDutiTests()</code></p>
+  <table>
+    <thead>
+      <tr><th>Status</th><th>Test</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script src="field-config.js"></script>
+  <script src="sanitizer.js"></script>
+  <script src="file-handler.js"></script>
+  <script src="validation.js"></script>
+  <script src="xml-generator.js"></script>
+  <script>
+    const tests = [];
+    const results = [];
+
+    function test(name, fn) {
+      tests.push({ name, fn });
+    }
+
+    function assert(condition, message) {
+      if (!condition) throw new Error(message || "Assertion failed");
+    }
+
+    function assertEqual(actual, expected, message) {
+      if (actual !== expected) {
+        throw new Error(`${message || "Values differ"}. Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+      }
+    }
+
+    function countOccurrences(text, pattern) {
+      return (text.match(new RegExp(pattern, "g")) || []).length;
+    }
+
+    function assertWellFormedXml(xml) {
+      const documentXml = new DOMParser().parseFromString(xml, "application/xml");
+      const parserError = documentXml.querySelector("parsererror");
+      assert(!parserError, parserError ? parserError.textContent : "XML parser error");
+      assertEqual(documentXml.documentElement.nodeName, "bulkstamping", "Root node should be bulkstamping");
+      return documentXml;
+    }
+
+    function assertTagOrder(xml, tags) {
+      let previousIndex = -1;
+      tags.forEach((tagName) => {
+        const index = xml.indexOf(`<${tagName}`);
+        assert(index > previousIndex, `${tagName} is out of order or missing`);
+        previousIndex = index;
+      });
+    }
+
+    function assertContainsAll(xml, tags) {
+      tags.forEach((tagName) => {
+        assert(xml.includes(`<${tagName}></${tagName}>`), `Blank optional tag ${tagName} is missing`);
+      });
+    }
+
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function validParty(overrides) {
+      return Object.assign({
+        type: "0",
+        name: "Ali Example",
+        nationality: "1",
+        icNo: "900101011234",
+        pasportNo: "",
+        pasportCountry: "",
+        rocNo: "",
+        busType: "",
+        incomeTaxNo: "TIN123",
+        incomeTaxBranch: "001",
+        street1: "123 Main Street",
+        street2: "Unit 10",
+        street3: "",
+        postcode: "50000",
+        city: "Kuala Lumpur",
+        state: "14",
+        country: "458",
+        telNo: "+60 12-3456789",
+        email: "ali@example.com"
+      }, overrides || {});
+    }
+
+    function valid43(overrides) {
+      return Object.assign({
+        applicationType: "43",
+        instrument: {
+          refNo: "REF43",
+          instrumentDate: "01/03/2026",
+          instrumentDateReceive: "",
+          principal: "-1",
+          subsidiary: "",
+          typeOfInstrument: "123",
+          typeOfInstrumentOthers: "Loan Agreement",
+          consideration: "1000.50",
+          duration: "1",
+          durationDesc: "12 months",
+          colLand: "2",
+          colLandDesc: "",
+          colShare: "2",
+          colDeposit: "2",
+          colOthers: "2",
+          colOthersDesc: "",
+          noOfCopy: "",
+          exemption: "",
+          exemptionOthers: "",
+          remession: "",
+          remessionOthers: ""
+        },
+        transferors: [validParty()],
+        transferees: [validParty({ name: "Siti Example", icNo: "910202021234", email: "siti@example.com" })],
+        attachments: [{ name: "sample.pdf", size: 4, base64: "QUJDRA==" }]
+      }, overrides || {});
+    }
+
+    function valid44(overrides) {
+      return Object.assign({
+        applicationType: "44",
+        instrument: {
+          refNo: "REF44",
+          instrumentDate: "01/03/2026",
+          instrumentDateReceive: "",
+          typeOfInstrument: "222",
+          typeOfInstrumentOthers: "Service Agreement",
+          noOfCopy: "",
+          remessionOrExemption: "",
+          payment: "10.00",
+          aggrementInfo: "Agreement details"
+        },
+        transferors: [validParty()],
+        transferees: [validParty({ name: "Buyer Example", icNo: "920303031234" })],
+        attachments: [{ name: "sample.pdf", size: 4, base64: "QUJDRA==" }]
+      }, overrides || {});
+    }
+
+    test("digitsOnly removes non-digits", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("IC-9012 A", "digitsOnly"), "9012");
+    });
+
+    test("decimalNumber keeps digits and one decimal point", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("RM 12.3.4x", "decimalNumber"), "12.34");
+    });
+
+    test("alphanumeric removes punctuation and spaces", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("AB-12 @z", "alphanumeric"), "AB12z");
+    });
+
+    test("phone removes unsupported characters", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("+60 (12) abc-999", "phone"), "+60 12 -999");
+    });
+
+    test("date keeps digits and slash only", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("01-02/2026abc", "date"), "0102/2026");
+    });
+
+    test("email trims and removes control characters", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue(" \nuser@example.com\t ", "email"), "user@example.com");
+    });
+
+    test("textFlexible removes control characters and unsupported symbols", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("\u0001Name{}[] OK", "textFlexible"), "Name OK");
+    });
+    test("textFlexible preserves valid legal and address characters", () => {
+      const value = "Messrs. A&B Co., Lot 12-3/4 (Tower_A) @ Jalan #5: 50%+ \"Annex\"";
+      assertEqual(EDutiSanitizer.sanitizeValue(value, "textFlexible"), value);
+    });
+
+    test("valid application type 43 data passes", () => {
+      const result = EDutiValidation.validateData(valid43());
+      assert(result.valid, result.errors.join("; "));
+    });
+
+    test("missing required refNo fails", () => {
+      const data = valid43();
+      data.instrument.refNo = "";
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("Applicant Reference Number is required")), result.errors.join("; "));
+    });
+
+    test("invalid calendar date fails", () => {
+      const data = valid43();
+      data.instrument.instrumentDate = "31/02/2026";
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("Invalid date format")), result.errors.join("; "));
+    });
+
+    test("decimal with more than two places fails", () => {
+      const data = valid43();
+      data.instrument.consideration = "100.999";
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("valid decimal")), result.errors.join("; "));
+    });
+
+    test("over-length telephone number fails after sanitization", () => {
+      const data = valid43();
+      data.transferors[0].telNo = "+60 12345678901234567890";
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("Telephone Number exceeds 20")), result.errors.join("; "));
+    });
+
+    test("Individual Citizen requires IC Number", () => {
+      const data = valid43();
+      data.transferors[0].icNo = "";
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("IC Number is required")), result.errors.join("; "));
+    });
+
+    test("Individual Non-Citizen requires passport number and country", () => {
+      const data = valid43();
+      data.transferors[0] = validParty({ nationality: "2", icNo: "", pasportNo: "", pasportCountry: "" });
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("Passport Number is required")), result.errors.join("; "));
+      assert(result.errors.some((message) => message.includes("Passport Country is required")), result.errors.join("; "));
+    });
+
+    test("Company requires registration number", () => {
+      const data = valid43();
+      data.transferors[0] = validParty({ type: "1", nationality: "", icNo: "", rocNo: "" });
+      const result = EDutiValidation.validateData(data);
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("Company Registration Number is required")), result.errors.join("; "));
+    });
+
+    test("missing attachment fails", () => {
+      const result = EDutiValidation.validateData(valid43({ attachments: [] }));
+      assert(!result.valid, "Validation should fail");
+      assert(result.errors.some((message) => message.includes("At least one attachment")), result.errors.join("; "));
+    });
+
+    test("file handler accepts allowed files", async () => {
+      const file = new File(["ABC"], "sample.pdf", { type: "application/pdf" });
+      const result = await EDutiFileHandler.processFiles([file]);
+      assertEqual(result.errors.length, 0, "No file errors expected");
+      assertEqual(result.accepted.length, 1, "One file should be accepted");
+      assertEqual(result.accepted[0].base64, "QUJD", "Base64 should match file content");
+    });
+
+    test("file handler rejects unsupported files", async () => {
+      const file = new File(["ABC"], "sample.exe", { type: "application/octet-stream" });
+      const result = await EDutiFileHandler.processFiles([file]);
+      assertEqual(result.accepted.length, 0, "Unsupported file should not be accepted");
+      assert(result.errors.some((message) => message.includes("Only PDF, JPEG, JPG, PNG and GIF files are allowed")), result.errors.join("; "));
+    });
+    test("file handler accepts uppercase and lowercase allowed extensions", async () => {
+      const files = [
+        new File(["A"], "upper.PDF", { type: "application/pdf" }),
+        new File(["B"], "mixed.JpEg", { type: "image/jpeg" }),
+        new File(["C"], "lower.png", { type: "image/png" })
+      ];
+      const result = await EDutiFileHandler.processFiles(files);
+      assertEqual(result.errors.length, 0, "Mixed-case allowed extensions should not fail");
+      assertEqual(result.accepted.length, 3, "All allowed mixed-case files should be accepted");
+    });
+
+    test("application type 43 XML contains required structure", () => {
+      const result = EDutiValidation.validateData(valid43());
+      const xml = EDutiXmlGenerator.generateXml(result.data);
+      assert(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'), "XML declaration missing");
+      assert(xml.includes("<bulkstamping>"), "Root missing");
+      assert(xml.includes("<applicationType>43</applicationType>"), "Application type missing");
+      assert(xml.includes("<transferor>"), "Transferor missing");
+      assert(xml.includes("<transferee>"), "Transferee missing");
+      assert(xml.includes('<attachment name="sample.pdf">QUJDRA==</attachment>'), "Attachment missing");
+      assert(xml.includes("<noOfCopy></noOfCopy>"), "Blank optional tag missing");
+      assertWellFormedXml(xml);
+    });
+
+    test("application type 43 XML tag order matches specification", () => {
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid43()).data);
+      assertTagOrder(xml, ["applicationType", "instrument", "refNo", "instrumentDate", "instrumentDateReceive", "principal", "subsidiary", "typeOfInstrument", "typeOfInstrumentOthers", "transferor", "transferee", "consideration", "duration", "durationDesc", "colLand", "colLandDesc", "colShare", "colDeposit", "colOthers", "colOthersDesc", "noOfCopy", "exemption", "exemptionOthers", "remession", "remessionOthers", "attachment"]);
+    });
+
+    test("application type 43 XML repeats transferor and transferee nodes", () => {
+      const data = valid43();
+      data.transferors.push(validParty({ name: "Second Transferor", icNo: "930404041234" }));
+      data.transferees.push(validParty({ name: "Second Transferee", icNo: "940505051234" }));
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(data).data);
+      assertEqual(countOccurrences(xml, "<transferor>"), 2, "Transferor node count");
+      assertEqual(countOccurrences(xml, "<transferee>"), 2, "Transferee node count");
+    });
+
+    test("application type 43 XML generates blank optional nodes", () => {
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid43()).data);
+      assertContainsAll(xml, ["instrumentDateReceive", "subsidiary", "noOfCopy", "exemption", "exemptionOthers", "remession", "remessionOthers"]);
+    });
+
+    test("application type 44 XML contains required structure", () => {
+      const result = EDutiValidation.validateData(valid44());
+      const xml = EDutiXmlGenerator.generateXml(result.data);
+      assert(xml.includes("<applicationType>44</applicationType>"), "Application type missing");
+      assert(xml.includes("<remessionOrExemption></remessionOrExemption>"), "remessionOrExemption missing");
+      assert(xml.includes("<payment>10.00</payment>"), "payment missing");
+      assert(xml.includes("<aggrementInfo>Agreement details</aggrementInfo>"), "aggrementInfo missing");
+      assertWellFormedXml(xml);
+    });
+
+    test("application type 44 XML tag order matches specification", () => {
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid44()).data);
+      assertTagOrder(xml, ["applicationType", "instrument", "refNo", "instrumentDate", "instrumentDateReceive", "typeOfInstrument", "typeOfInstrumentOthers", "transferor", "transferee", "noOfCopy", "remessionOrExemption", "payment", "aggrementInfo", "attachment"]);
+    });
+
+    test("application type 44 XML repeats transferor and transferee nodes", () => {
+      const data = valid44();
+      data.transferors.push(validParty({ name: "Second Transferor", icNo: "930404041234" }));
+      data.transferees.push(validParty({ name: "Second Transferee", icNo: "940505051234" }));
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(data).data);
+      assertEqual(countOccurrences(xml, "<transferor>"), 2, "Transferor node count");
+      assertEqual(countOccurrences(xml, "<transferee>"), 2, "Transferee node count");
+    });
+
+    test("application type 44 XML generates blank optional nodes", () => {
+      const data = valid44();
+      data.instrument.payment = "";
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(data).data);
+      assertContainsAll(xml, ["instrumentDateReceive", "noOfCopy", "remessionOrExemption", "payment"]);
+    });
+
+    test("XML escapes text values and attachment attributes", () => {
+      assertEqual(EDutiXmlGenerator.escapeXml("A&B <C> \"D\" 'E'"), "A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;");
+      const data = valid44();
+      data.instrument.refNo = "A&B <C> \"D\" 'E'";
+      data.attachments = [{ name: "a&b\"'<>.pdf", size: 1, base64: "QUJDRA==" }];
+      const xml = EDutiXmlGenerator.generateXml(data);
+      assert(xml.includes("<refNo>A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;</refNo>"), xml);
+      assert(xml.includes("attachment name=\"a&amp;b&quot;&apos;&lt;&gt;.pdf\""), xml);
+      assertWellFormedXml(xml);
+    });
+
+    test("download filename uses required timestamp format", () => {
+      const name = EDutiXmlGenerator.buildDownloadName(new Date(2026, 5, 4, 10, 30, 5));
+      assertEqual(name, "eduti_20260604_103005.xml");
+    });
+    test("download output is invalidated after a form field changes", async () => {
+      assert(window.DataTransfer && window.File, "Browser must support DataTransfer and File for this UI test");
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = "index.html";
+      document.body.appendChild(iframe);
+      await new Promise((resolve, reject) => {
+        iframe.onload = resolve;
+        iframe.onerror = () => reject(new Error("Unable to load index.html in iframe"));
+      });
+      await delay(100);
+
+      const doc = iframe.contentDocument;
+      function setInput(key, value) {
+        const input = doc.querySelector(`[data-error-key="${key}"]`);
+        assert(input, `${key} input not found`);
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      setInput("instrument.refNo", "REF43");
+      setInput("instrument.instrumentDate", "01/03/2026");
+      setInput("instrument.principal", "-1");
+      setInput("instrument.typeOfInstrumentOthers", "Loan Agreement");
+      setInput("instrument.consideration", "1000.50");
+      ["transferors.0", "transferees.0"].forEach((prefix, index) => {
+        setInput(`${prefix}.type`, "0");
+        setInput(`${prefix}.name`, index === 0 ? "Ali Example" : "Siti Example");
+        setInput(`${prefix}.nationality`, "1");
+        setInput(`${prefix}.icNo`, index === 0 ? "900101011234" : "910202021234");
+        setInput(`${prefix}.street1`, "123 Main Street");
+        setInput(`${prefix}.street2`, "Unit 10");
+        setInput(`${prefix}.postcode`, "50000");
+        setInput(`${prefix}.telNo`, "+60 12-3456789");
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(new File(["ABC"], "sample.pdf", { type: "application/pdf" }));
+      const attachmentInput = doc.getElementById("attachmentInput");
+      attachmentInput.files = dt.files;
+      attachmentInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(100);
+
+      doc.getElementById("previewXml").click();
+      await delay(50);
+      assert(!doc.getElementById("downloadXml").disabled, "Download should be enabled after a valid preview");
+      assert(doc.getElementById("xmlPreview").value.includes("<bulkstamping>"), "Preview should contain XML");
+
+      setInput("instrument.refNo", "REF43-CHANGED");
+      assert(doc.getElementById("downloadXml").disabled, "Download should be disabled after form changes");
+      assertEqual(doc.getElementById("xmlPreview").value, "", "Preview should be cleared after form changes");
+      iframe.remove();
+    });
+
+    async function run() {
+      results.length = 0;
+      const tbody = document.getElementById("results");
+      let passed = 0;
+      for (const item of tests) {
+        try {
+          await item.fn();
+          passed += 1;
+          results.push({ status: "PASS", name: item.name, details: "" });
+        } catch (error) {
+          results.push({ status: "FAIL", name: item.name, details: error.stack || error.message || String(error) });
+        }
+      }
+      tbody.innerHTML = results.map((result) => `
+        <tr>
+          <td class="${result.status === "PASS" ? "pass" : "fail"}">${result.status}</td>
+          <td>${escapeHtml(result.name)}</td>
+          <td><pre>${escapeHtml(result.details)}</pre></td>
+        </tr>
+      `).join("");
+      const summary = document.getElementById("summary");
+      summary.textContent = `${passed}/${tests.length} tests passed`;
+      summary.className = passed === tests.length ? "pass" : "fail";
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    window.runEDutiTests = run;
+    run();
+  </script>
+</body>
+</html>
+
+
+
+
