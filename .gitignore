@@ -1,2 +1,6 @@
 *.pdf
 *.txt
+*.xml
+*.log
+*.csv
+AGENTS.md

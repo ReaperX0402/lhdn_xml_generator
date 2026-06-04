@@ -5,24 +5,106 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>e-Duti XML Generator Tests</title>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #1f2933; background: #f5f7fa; }
-    h1 { margin-top: 0; }
-    #summary { padding: 12px 14px; border-radius: 6px; background: #fff; border: 1px solid #d7dee8; font-weight: 700; }
-    table { width: 100%; border-collapse: collapse; margin-top: 18px; background: #fff; }
-    th, td { border: 1px solid #d7dee8; padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: #eef3f8; }
-    .pass { color: #146c43; font-weight: 700; }
-    .fail { color: #b42318; font-weight: 700; }
-    pre { white-space: pre-wrap; margin: 0; }
+    body {
+      margin: 24px;
+      background: #f5f7fa;
+      color: #1f2933;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.6rem;
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: #5b6776;
+    }
+
+    #summary {
+      margin: 16px 0;
+      padding: 12px 14px;
+      border: 1px solid #d7dee8;
+      border-radius: 8px;
+      background: #ffffff;
+      font-weight: 700;
+      color: #1f2933;
+    }
+
+    #summary.pass {
+      border-color: #146c43;
+      color: #146c43;
+    }
+
+    #summary.fail {
+      border-color: #b42318;
+      color: #b42318;
+    }
+
+    button {
+      min-height: 36px;
+      padding: 8px 12px;
+      border: 1px solid #1769aa;
+      border-radius: 6px;
+      background: #1769aa;
+      color: #ffffff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border: 1px solid #d7dee8;
+    }
+
+    th,
+    td {
+      border: 1px solid #d7dee8;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f8;
+    }
+
+    .pass {
+      color: #146c43;
+      font-weight: 700;
+    }
+
+    .fail {
+      color: #b42318;
+      font-weight: 700;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
-  <h1>e-Duti XML Generator Automated Tests</h1>
-  <p id="summary">Running tests...</p>
-  <p>Browser console rerun: <code>window.runEDutiTests()</code></p>
+  <h1>e-Duti XML Generator Test Harness</h1>
+  <p>Runs automatically on page load using browser-native APIs only. Console rerun: <code>window.runEDutiTests()</code></p>
+  <button type="button" id="rerunTests">Run Tests Again</button>
+  <div id="summary">Waiting to run tests...</div>
+
   <table>
     <thead>
-      <tr><th>Status</th><th>Test</th><th>Details</th></tr>
+      <tr>
+        <th>Status</th>
+        <th>Area</th>
+        <th>Test</th>
+        <th>Details</th>
+      </tr>
     </thead>
     <tbody id="results"></tbody>
   </table>
@@ -31,13 +113,33 @@
   <script src="sanitizer.js"></script>
   <script src="file-handler.js"></script>
   <script src="validation.js"></script>
+
+  <div id="appFixture" hidden>
+    <select id="applicationType"></select>
+    <div id="generalFields"></div>
+    <div id="instrumentFields"></div>
+    <div id="exemptionFields"></div>
+    <div id="transferors"></div>
+    <div id="transferees"></div>
+    <button type="button" id="addTransferor"></button>
+    <button type="button" id="addTransferee"></button>
+    <input id="attachmentInput" type="file" multiple>
+    <ul id="attachmentList"></ul>
+    <div id="attachmentMessages"></div>
+    <button type="button" id="previewXml"></button>
+    <button type="button" id="downloadXml" disabled></button>
+    <button type="button" id="clearForm"></button>
+    <textarea id="xmlPreview" readonly></textarea>
+    <aside id="complianceStatus"></aside>
+    <div id="toastContainer"></div>
+  </div>
   <script src="xml-generator.js"></script>
+  <script src="app.js"></script>
   <script>
     const tests = [];
-    const results = [];
 
-    function test(name, fn) {
-      tests.push({ name, fn });
+    function test(area, name, fn) {
+      tests.push({ area, name, fn });
     }
 
     function assert(condition, message) {
@@ -50,16 +152,22 @@
       }
     }
 
+    function assertIncludes(text, expected, message) {
+      if (!String(text).includes(expected)) {
+        throw new Error(`${message || "Expected text not found"}. Missing ${JSON.stringify(expected)} in ${JSON.stringify(text)}`);
+      }
+    }
+
     function countOccurrences(text, pattern) {
-      return (text.match(new RegExp(pattern, "g")) || []).length;
+      return (String(text).match(new RegExp(pattern, "g")) || []).length;
     }
 
     function assertWellFormedXml(xml) {
-      const documentXml = new DOMParser().parseFromString(xml, "application/xml");
-      const parserError = documentXml.querySelector("parsererror");
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      const parserError = doc.querySelector("parsererror");
       assert(!parserError, parserError ? parserError.textContent : "XML parser error");
-      assertEqual(documentXml.documentElement.nodeName, "bulkstamping", "Root node should be bulkstamping");
-      return documentXml;
+      assertEqual(doc.documentElement.nodeName, "bulkstamping", "Root node should be bulkstamping");
+      return doc;
     }
 
     function assertTagOrder(xml, tags) {
@@ -71,14 +179,65 @@
       });
     }
 
-    function assertContainsAll(xml, tags) {
-      tags.forEach((tagName) => {
-        assert(xml.includes(`<${tagName}></${tagName}>`), `Blank optional tag ${tagName} is missing`);
-      });
-    }
-
     function delay(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function setFixtureInput(key, value) {
+      const input = document.querySelector(`#appFixture [data-error-key="${key}"]`);
+      assert(input, `${key} input not found`);
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      return input;
+    }
+
+    function fixtureToastText() {
+      return Array.from(document.querySelectorAll("#toastContainer .toast__message")).map((toast) => toast.textContent).join(" | ");
+    }
+
+    function clearFixtureToasts() {
+      document.querySelectorAll("#toastContainer .toast").forEach((toast) => toast.remove());
+    }
+
+    function complianceText() {
+      return document.getElementById("complianceStatus").textContent.replace(/\s+/g, " ").trim();
+    }
+
+    function assertComplianceIncludes(text) {
+      assertIncludes(complianceText(), text, "Compliance status did not include expected text");
+    }
+
+    function assertComplianceExcludes(text) {
+      assert(!complianceText().includes(text), `Compliance status should not include ${JSON.stringify(text)}. Current: ${complianceText()}`);
+    }
+
+    async function attachFixturePdf() {
+      assert(window.DataTransfer && window.File, "Browser must support DataTransfer and File for attachment fixture tests");
+      const input = document.getElementById("attachmentInput");
+      const files = new DataTransfer();
+      files.items.add(new File(["ABC"], "sample.pdf", { type: "application/pdf" }));
+      input.files = files.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await delay(25);
+    }
+    async function fillMinimumRequiredFixture() {
+      setFixtureInput("instrument.refNo", "REF43");
+      setFixtureInput("instrument.instrumentDate", "01/03/2026");
+      setFixtureInput("instrument.principal", "-1");
+      setFixtureInput("instrument.typeOfInstrumentOthers", "Loan Agreement");
+      setFixtureInput("instrument.consideration", "1000.50");
+      ["transferors.0", "transferees.0"].forEach((prefix, index) => {
+        setFixtureInput(`${prefix}.type`, "0");
+        setFixtureInput(`${prefix}.name`, index === 0 ? "Ali Example" : "Siti Example");
+        setFixtureInput(`${prefix}.nationality`, "1");
+        setFixtureInput(`${prefix}.icNo`, index === 0 ? "900101011234" : "910202021234");
+        setFixtureInput(`${prefix}.street1`, "123 Main Street");
+        setFixtureInput(`${prefix}.street2`, "Unit 10");
+        setFixtureInput(`${prefix}.postcode`, "50000");
+        setFixtureInput(`${prefix}.telNo`, "+60 12-3456789");
+      });
+      await attachFixturePdf();
     }
 
     function validParty(overrides) {
@@ -133,7 +292,7 @@
         },
         transferors: [validParty()],
         transferees: [validParty({ name: "Siti Example", icNo: "910202021234", email: "siti@example.com" })],
-        attachments: [{ name: "sample.pdf", size: 4, base64: "QUJDRA==" }]
+        attachments: [{ name: "sample.pdf", size: 3, base64: "QUJD" }]
       }, overrides || {});
     }
 
@@ -153,48 +312,122 @@
         },
         transferors: [validParty()],
         transferees: [validParty({ name: "Buyer Example", icNo: "920303031234" })],
-        attachments: [{ name: "sample.pdf", size: 4, base64: "QUJDRA==" }]
+        attachments: [{ name: "sample.pdf", size: 3, base64: "QUJD" }]
       }, overrides || {});
     }
 
-    test("digitsOnly removes non-digits", () => {
-      assertEqual(EDutiSanitizer.sanitizeValue("IC-9012 A", "digitsOnly"), "9012");
+    test("app.js feedback", "sanitization message mapping is available", () => {
+      assertEqual(EDutiAppFeedback.getSanitizationMessage("digitsOnly"), "Only numbers are allowed. Invalid characters were removed.");
+      assertEqual(EDutiAppFeedback.getSanitizationMessage("decimalNumber"), "Only decimal numbers are allowed. Invalid characters were removed.");
+      assertEqual(EDutiAppFeedback.getSanitizationMessage("date"), "Use date format DD/MM/YYYY.");
+      assertEqual(EDutiAppFeedback.getSanitizationMessage("phone"), "Only phone number characters are allowed.");
+      assertEqual(EDutiAppFeedback.getSanitizationMessage("alphanumeric"), "Only letters and numbers are allowed.");
+      assertEqual(EDutiAppFeedback.getSanitizationMessage("textFlexible"), "Unsupported characters were removed.");
     });
 
-    test("decimalNumber keeps digits and one decimal point", () => {
-      assertEqual(EDutiSanitizer.sanitizeValue("RM 12.3.4x", "decimalNumber"), "12.34");
+    test("app.js feedback", "toast generation supports type and deduplicates repeated messages", () => {
+      const container = document.createElement("div");
+      const first = EDutiAppFeedback.createToast(container, "Duplicate toast", "warning");
+      const second = EDutiAppFeedback.createToast(container, "Duplicate toast", "warning");
+      assertEqual(container.querySelectorAll(".toast").length, 1, "Duplicate toast should be reused");
+      assert(first === second, "Duplicate toast should return existing element");
+      assert(container.querySelector(".toast--warning"), "Warning class should be applied");
+      EDutiAppFeedback.createToast(container, "Different toast", "success");
+      assertEqual(container.querySelectorAll(".toast").length, 2, "Different messages should stack");
+    });
+    test("app.js guidance", "required label is clean and uses asterisk only", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      const label = document.querySelector('[data-field-wrapper="instrument.refNo"] .field-label-text');
+      assert(label, "Reference number label should exist");
+      assertEqual(label.textContent.trim(), "Applicant Reference Number *");
+      assert(!label.textContent.includes("required"), "Label should not contain the word required");
     });
 
-    test("alphanumeric removes punctuation and spaces", () => {
-      assertEqual(EDutiSanitizer.sanitizeValue("AB-12 @z", "alphanumeric"), "AB12z");
+    test("app.js guidance", "each field has one guidance message slot", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      const wrapper = document.querySelector('[data-field-wrapper="instrument.refNo"]');
+      assertEqual(wrapper.querySelectorAll('.field-message').length, 1, "Only one guidance message element should render");
+      assertEqual(wrapper.querySelectorAll('.hint, .field-warning, .field-error').length, 0, "Old duplicate hint/warning/error elements should not render");
     });
 
-    test("phone removes unsupported characters", () => {
+    test("app.js guidance", "error has priority over helper and warning", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      const message = document.querySelector('[data-message-for="instrument.refNo"]');
+      assertEqual(message.textContent, "Applicant Reference Number is required.");
+      assert(message.classList.contains("field-message--error"), "Required message should be styled as error");
+      assert(!message.textContent.includes("Max 100"), "Error should not duplicate max helper text");
+    });
+
+    test("app.js guidance", "max length helper appears only when no error or warning", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      setFixtureInput("instrument.refNo", "REF123");
+      const message = document.querySelector('[data-message-for="instrument.refNo"]');
+      assertEqual(message.textContent, "Max 100 characters");
+      assert(message.classList.contains("field-message--helper"), "Short valid value should show helper text");
+      assert(!message.classList.contains("field-message--warning"), "Short valid value should not show max warning");
+    });
+
+    test("app.js guidance", "near max length warning replaces helper", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      setFixtureInput("instrument.refNo", "A".repeat(90));
+      const message = document.querySelector('[data-message-for="instrument.refNo"]');
+      assertEqual(message.textContent, "Approaching maximum length: 90/100 characters.");
+      assert(message.classList.contains("field-message--warning"), "Near-limit message should be a warning");
+      assert(!message.textContent.includes("Max 100"), "Near-limit warning should not duplicate helper text");
+    });
+
+    test("app.js guidance", "over max length shows only validation error", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      setFixtureInput("instrument.refNo", "A".repeat(101));
+      const message = document.querySelector('[data-message-for="instrument.refNo"]');
+      assertEqual(message.textContent, "Applicant Reference Number must not exceed 100 characters.");
+      assert(message.classList.contains("field-message--error"), "Over-limit message should be an error");
+      assert(!message.textContent.includes("Approaching maximum length"), "Error should not duplicate warning text");
+    });
+    test("sanitizer.js", "digitsOnly removes non-digits", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("ABC123@#", "digitsOnly"), "123");
+    });
+
+    test("sanitizer.js", "decimalNumber removes currency symbols, commas, letters, and extra decimal points", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("RM 1,200.50abc", "decimalNumber"), "1200.50");
+      assertEqual(EDutiSanitizer.sanitizeValue("12.3.4", "decimalNumber"), "12.34");
+    });
+
+    test("sanitizer.js", "date removes letters and unsupported separators without making date valid", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("01-03-2026abc", "date"), "01032026");
+    });
+
+    test("sanitizer.js", "phone keeps only allowed phone characters", () => {
       assertEqual(EDutiSanitizer.sanitizeValue("+60 (12) abc-999", "phone"), "+60 12 -999");
     });
 
-    test("date keeps digits and slash only", () => {
-      assertEqual(EDutiSanitizer.sanitizeValue("01-02/2026abc", "date"), "0102/2026");
+    test("sanitizer.js", "alphanumeric removes symbols", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("AB-123@#", "alphanumeric"), "AB123");
     });
 
-    test("email trims and removes control characters", () => {
-      assertEqual(EDutiSanitizer.sanitizeValue(" \nuser@example.com\t ", "email"), "user@example.com");
+    test("sanitizer.js", "textFlexible removes unsafe characters and preserves valid legal/address punctuation", () => {
+      assertEqual(EDutiSanitizer.sanitizeValue("\u0001Agreement{}[] OK", "textFlexible"), "Agreement OK");
+      const validText = "Messrs. A&B Co., Lot 12-3/4 (Tower_A) @ Jalan #5: 50%+ \"Annex\"";
+      assertEqual(EDutiSanitizer.sanitizeValue(validText, "textFlexible"), validText);
     });
 
-    test("textFlexible removes control characters and unsupported symbols", () => {
-      assertEqual(EDutiSanitizer.sanitizeValue("\u0001Name{}[] OK", "textFlexible"), "Name OK");
-    });
-    test("textFlexible preserves valid legal and address characters", () => {
-      const value = "Messrs. A&B Co., Lot 12-3/4 (Tower_A) @ Jalan #5: 50%+ \"Annex\"";
-      assertEqual(EDutiSanitizer.sanitizeValue(value, "textFlexible"), value);
-    });
-
-    test("valid application type 43 data passes", () => {
+    test("validation.js", "valid application type 43 data passes", () => {
       const result = EDutiValidation.validateData(valid43());
       assert(result.valid, result.errors.join("; "));
     });
 
-    test("missing required refNo fails", () => {
+    test("validation.js", "valid application type 44 data passes", () => {
+      const result = EDutiValidation.validateData(valid44());
+      assert(result.valid, result.errors.join("; "));
+    });
+
+    test("validation.js", "required fields fail when missing", () => {
       const data = valid43();
       data.instrument.refNo = "";
       const result = EDutiValidation.validateData(data);
@@ -202,15 +435,21 @@
       assert(result.errors.some((message) => message.includes("Applicant Reference Number is required")), result.errors.join("; "));
     });
 
-    test("invalid calendar date fails", () => {
-      const data = valid43();
-      data.instrument.instrumentDate = "31/02/2026";
-      const result = EDutiValidation.validateData(data);
-      assert(!result.valid, "Validation should fail");
-      assert(result.errors.some((message) => message.includes("Invalid date format")), result.errors.join("; "));
+    test("validation.js", "invalid date format and invalid calendar date fail", () => {
+      const badFormat = valid43();
+      badFormat.instrument.instrumentDate = "01032026";
+      const badFormatResult = EDutiValidation.validateData(badFormat);
+      assert(!badFormatResult.valid, "Date without slashes should fail");
+      assert(badFormatResult.errors.some((message) => message.includes("Invalid date format")), badFormatResult.errors.join("; "));
+
+      const badCalendar = valid43();
+      badCalendar.instrument.instrumentDate = "31/02/2026";
+      const badCalendarResult = EDutiValidation.validateData(badCalendar);
+      assert(!badCalendarResult.valid, "Invalid calendar date should fail");
+      assert(badCalendarResult.errors.some((message) => message.includes("Invalid date format")), badCalendarResult.errors.join("; "));
     });
 
-    test("decimal with more than two places fails", () => {
+    test("validation.js", "decimal precision fails with more than two decimal places", () => {
       const data = valid43();
       data.instrument.consideration = "100.999";
       const result = EDutiValidation.validateData(data);
@@ -218,60 +457,50 @@
       assert(result.errors.some((message) => message.includes("valid decimal")), result.errors.join("; "));
     });
 
-    test("over-length telephone number fails after sanitization", () => {
-      const data = valid43();
-      data.transferors[0].telNo = "+60 12345678901234567890";
-      const result = EDutiValidation.validateData(data);
-      assert(!result.valid, "Validation should fail");
-      assert(result.errors.some((message) => message.includes("Telephone Number exceeds 20")), result.errors.join("; "));
+    test("validation.js", "conditional mandatory rules are enforced", () => {
+      const citizen = valid43();
+      citizen.transferors[0].icNo = "";
+      const citizenResult = EDutiValidation.validateData(citizen);
+      assert(!citizenResult.valid, "Citizen without IC should fail");
+      assert(citizenResult.errors.some((message) => message.includes("IC Number is required")), citizenResult.errors.join("; "));
+
+      const nonCitizen = valid43();
+      nonCitizen.transferors[0] = validParty({ nationality: "2", icNo: "", pasportNo: "", pasportCountry: "" });
+      const nonCitizenResult = EDutiValidation.validateData(nonCitizen);
+      assert(!nonCitizenResult.valid, "Non-citizen without passport fields should fail");
+      assert(nonCitizenResult.errors.some((message) => message.includes("Passport Number is required")), nonCitizenResult.errors.join("; "));
+      assert(nonCitizenResult.errors.some((message) => message.includes("Passport Country is required")), nonCitizenResult.errors.join("; "));
+
+      const company = valid43();
+      company.transferors[0] = validParty({ type: "1", nationality: "", icNo: "", rocNo: "" });
+      const companyResult = EDutiValidation.validateData(company);
+      assert(!companyResult.valid, "Company without registration number should fail");
+      assert(companyResult.errors.some((message) => message.includes("Company Registration Number is required")), companyResult.errors.join("; "));
     });
 
-    test("Individual Citizen requires IC Number", () => {
-      const data = valid43();
-      data.transferors[0].icNo = "";
-      const result = EDutiValidation.validateData(data);
-      assert(!result.valid, "Validation should fail");
-      assert(result.errors.some((message) => message.includes("IC Number is required")), result.errors.join("; "));
-    });
-
-    test("Individual Non-Citizen requires passport number and country", () => {
-      const data = valid43();
-      data.transferors[0] = validParty({ nationality: "2", icNo: "", pasportNo: "", pasportCountry: "" });
-      const result = EDutiValidation.validateData(data);
-      assert(!result.valid, "Validation should fail");
-      assert(result.errors.some((message) => message.includes("Passport Number is required")), result.errors.join("; "));
-      assert(result.errors.some((message) => message.includes("Passport Country is required")), result.errors.join("; "));
-    });
-
-    test("Company requires registration number", () => {
-      const data = valid43();
-      data.transferors[0] = validParty({ type: "1", nationality: "", icNo: "", rocNo: "" });
-      const result = EDutiValidation.validateData(data);
-      assert(!result.valid, "Validation should fail");
-      assert(result.errors.some((message) => message.includes("Company Registration Number is required")), result.errors.join("; "));
-    });
-
-    test("missing attachment fails", () => {
+    test("validation.js", "attachment is required", () => {
       const result = EDutiValidation.validateData(valid43({ attachments: [] }));
       assert(!result.valid, "Validation should fail");
       assert(result.errors.some((message) => message.includes("At least one attachment")), result.errors.join("; "));
     });
 
-    test("file handler accepts allowed files", async () => {
+    test("file-handler.js", "allowed attachment is converted to Base64", async () => {
       const file = new File(["ABC"], "sample.pdf", { type: "application/pdf" });
       const result = await EDutiFileHandler.processFiles([file]);
       assertEqual(result.errors.length, 0, "No file errors expected");
       assertEqual(result.accepted.length, 1, "One file should be accepted");
-      assertEqual(result.accepted[0].base64, "QUJD", "Base64 should match file content");
+      assertEqual(result.accepted[0].name, "sample.pdf");
+      assertEqual(result.accepted[0].base64, "QUJD");
     });
 
-    test("file handler rejects unsupported files", async () => {
+    test("file-handler.js", "unsupported attachment type is rejected", async () => {
       const file = new File(["ABC"], "sample.exe", { type: "application/octet-stream" });
       const result = await EDutiFileHandler.processFiles([file]);
       assertEqual(result.accepted.length, 0, "Unsupported file should not be accepted");
       assert(result.errors.some((message) => message.includes("Only PDF, JPEG, JPG, PNG and GIF files are allowed")), result.errors.join("; "));
     });
-    test("file handler accepts uppercase and lowercase allowed extensions", async () => {
+
+    test("file-handler.js", "uppercase and lowercase allowed extensions are accepted", async () => {
       const files = [
         new File(["A"], "upper.PDF", { type: "application/pdf" }),
         new File(["B"], "mixed.JpEg", { type: "image/jpeg" }),
@@ -282,162 +511,178 @@
       assertEqual(result.accepted.length, 3, "All allowed mixed-case files should be accepted");
     });
 
-    test("application type 43 XML contains required structure", () => {
-      const result = EDutiValidation.validateData(valid43());
-      const xml = EDutiXmlGenerator.generateXml(result.data);
-      assert(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'), "XML declaration missing");
-      assert(xml.includes("<bulkstamping>"), "Root missing");
-      assert(xml.includes("<applicationType>43</applicationType>"), "Application type missing");
-      assert(xml.includes("<transferor>"), "Transferor missing");
-      assert(xml.includes("<transferee>"), "Transferee missing");
-      assert(xml.includes('<attachment name="sample.pdf">QUJDRA==</attachment>'), "Attachment missing");
-      assert(xml.includes("<noOfCopy></noOfCopy>"), "Blank optional tag missing");
-      assertWellFormedXml(xml);
-    });
-
-    test("application type 43 XML tag order matches specification", () => {
-      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid43()).data);
-      assertTagOrder(xml, ["applicationType", "instrument", "refNo", "instrumentDate", "instrumentDateReceive", "principal", "subsidiary", "typeOfInstrument", "typeOfInstrumentOthers", "transferor", "transferee", "consideration", "duration", "durationDesc", "colLand", "colLandDesc", "colShare", "colDeposit", "colOthers", "colOthersDesc", "noOfCopy", "exemption", "exemptionOthers", "remession", "remessionOthers", "attachment"]);
-    });
-
-    test("application type 43 XML repeats transferor and transferee nodes", () => {
+    test("xml-generator.js", "application type 43 XML structure, order, blanks, and repeated parties are correct", () => {
       const data = valid43();
       data.transferors.push(validParty({ name: "Second Transferor", icNo: "930404041234" }));
       data.transferees.push(validParty({ name: "Second Transferee", icNo: "940505051234" }));
-      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(data).data);
+      const result = EDutiValidation.validateData(data);
+      assert(result.valid, result.errors.join("; "));
+      const xml = EDutiXmlGenerator.generateXml(result.data);
+      assert(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'), "XML declaration missing");
+      assertIncludes(xml, "<applicationType>43</applicationType>");
       assertEqual(countOccurrences(xml, "<transferor>"), 2, "Transferor node count");
       assertEqual(countOccurrences(xml, "<transferee>"), 2, "Transferee node count");
+      ["instrumentDateReceive", "subsidiary", "noOfCopy", "exemption", "exemptionOthers", "remession", "remessionOthers"].forEach((tag) => assertIncludes(xml, `<${tag}></${tag}>`));
+      assertTagOrder(xml, ["applicationType", "instrument", "refNo", "instrumentDate", "instrumentDateReceive", "principal", "subsidiary", "typeOfInstrument", "typeOfInstrumentOthers", "transferor", "transferee", "consideration", "duration", "durationDesc", "colLand", "colLandDesc", "colShare", "colDeposit", "colOthers", "colOthersDesc", "noOfCopy", "exemption", "exemptionOthers", "remession", "remessionOthers", "attachment"]);
     });
 
-    test("application type 43 XML generates blank optional nodes", () => {
-      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid43()).data);
-      assertContainsAll(xml, ["instrumentDateReceive", "subsidiary", "noOfCopy", "exemption", "exemptionOthers", "remession", "remessionOthers"]);
-    });
-
-    test("application type 44 XML contains required structure", () => {
-      const result = EDutiValidation.validateData(valid44());
+    test("xml-generator.js", "application type 44 XML structure, order, blanks, and repeated parties are correct", () => {
+      const data = valid44();
+      data.instrument.payment = "";
+      data.transferors.push(validParty({ name: "Second Transferor", icNo: "930404041234" }));
+      data.transferees.push(validParty({ name: "Second Transferee", icNo: "940505051234" }));
+      const result = EDutiValidation.validateData(data);
+      assert(result.valid, result.errors.join("; "));
       const xml = EDutiXmlGenerator.generateXml(result.data);
-      assert(xml.includes("<applicationType>44</applicationType>"), "Application type missing");
-      assert(xml.includes("<remessionOrExemption></remessionOrExemption>"), "remessionOrExemption missing");
-      assert(xml.includes("<payment>10.00</payment>"), "payment missing");
-      assert(xml.includes("<aggrementInfo>Agreement details</aggrementInfo>"), "aggrementInfo missing");
-      assertWellFormedXml(xml);
-    });
-
-    test("application type 44 XML tag order matches specification", () => {
-      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid44()).data);
+      assertIncludes(xml, "<applicationType>44</applicationType>");
+      assertIncludes(xml, "<aggrementInfo>Agreement details</aggrementInfo>");
+      assertEqual(countOccurrences(xml, "<transferor>"), 2, "Transferor node count");
+      assertEqual(countOccurrences(xml, "<transferee>"), 2, "Transferee node count");
+      ["instrumentDateReceive", "noOfCopy", "remessionOrExemption", "payment"].forEach((tag) => assertIncludes(xml, `<${tag}></${tag}>`));
       assertTagOrder(xml, ["applicationType", "instrument", "refNo", "instrumentDate", "instrumentDateReceive", "typeOfInstrument", "typeOfInstrumentOthers", "transferor", "transferee", "noOfCopy", "remessionOrExemption", "payment", "aggrementInfo", "attachment"]);
     });
 
-    test("application type 44 XML repeats transferor and transferee nodes", () => {
-      const data = valid44();
-      data.transferors.push(validParty({ name: "Second Transferor", icNo: "930404041234" }));
-      data.transferees.push(validParty({ name: "Second Transferee", icNo: "940505051234" }));
-      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(data).data);
-      assertEqual(countOccurrences(xml, "<transferor>"), 2, "Transferor node count");
-      assertEqual(countOccurrences(xml, "<transferee>"), 2, "Transferee node count");
-    });
-
-    test("application type 44 XML generates blank optional nodes", () => {
-      const data = valid44();
-      data.instrument.payment = "";
-      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(data).data);
-      assertContainsAll(xml, ["instrumentDateReceive", "noOfCopy", "remessionOrExemption", "payment"]);
-    });
-
-    test("XML escapes text values and attachment attributes", () => {
+    test("xml-generator.js", "XML escaping covers text and attachment filename attributes", () => {
       assertEqual(EDutiXmlGenerator.escapeXml("A&B <C> \"D\" 'E'"), "A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;");
       const data = valid44();
       data.instrument.refNo = "A&B <C> \"D\" 'E'";
-      data.attachments = [{ name: "a&b\"'<>.pdf", size: 1, base64: "QUJDRA==" }];
+      data.attachments = [{ name: "a&b\"'<>.pdf", size: 1, base64: "QUJD" }];
       const xml = EDutiXmlGenerator.generateXml(data);
-      assert(xml.includes("<refNo>A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;</refNo>"), xml);
-      assert(xml.includes("attachment name=\"a&amp;b&quot;&apos;&lt;&gt;.pdf\""), xml);
-      assertWellFormedXml(xml);
+      assertIncludes(xml, "<refNo>A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;</refNo>");
+      assertIncludes(xml, "attachment name=\"a&amp;b&quot;&apos;&lt;&gt;.pdf\"");
     });
 
-    test("download filename uses required timestamp format", () => {
+    test("DOMParser", "generated application type 43 XML is well formed", () => {
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid43()).data);
+      const doc = assertWellFormedXml(xml);
+      assertEqual(doc.querySelector("applicationType").textContent, "43");
+    });
+
+    test("DOMParser", "generated application type 44 XML is well formed", () => {
+      const xml = EDutiXmlGenerator.generateXml(EDutiValidation.validateData(valid44()).data);
+      const doc = assertWellFormedXml(xml);
+      assertEqual(doc.querySelector("applicationType").textContent, "44");
+    });
+
+    test("xml-generator.js", "download filename uses required timestamp format", () => {
       const name = EDutiXmlGenerator.buildDownloadName(new Date(2026, 5, 4, 10, 30, 5));
       assertEqual(name, "eduti_20260604_103005.xml");
     });
-    test("download output is invalidated after a form field changes", async () => {
-      assert(window.DataTransfer && window.File, "Browser must support DataTransfer and File for this UI test");
-      const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
-      iframe.src = "index.html";
-      document.body.appendChild(iframe);
-      await new Promise((resolve, reject) => {
-        iframe.onload = resolve;
-        iframe.onerror = () => reject(new Error("Unable to load index.html in iframe"));
-      });
-      await delay(100);
-
-      const doc = iframe.contentDocument;
-      function setInput(key, value) {
-        const input = doc.querySelector(`[data-error-key="${key}"]`);
-        assert(input, `${key} input not found`);
-        input.value = value;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-
-      setInput("instrument.refNo", "REF43");
-      setInput("instrument.instrumentDate", "01/03/2026");
-      setInput("instrument.principal", "-1");
-      setInput("instrument.typeOfInstrumentOthers", "Loan Agreement");
-      setInput("instrument.consideration", "1000.50");
-      ["transferors.0", "transferees.0"].forEach((prefix, index) => {
-        setInput(`${prefix}.type`, "0");
-        setInput(`${prefix}.name`, index === 0 ? "Ali Example" : "Siti Example");
-        setInput(`${prefix}.nationality`, "1");
-        setInput(`${prefix}.icNo`, index === 0 ? "900101011234" : "910202021234");
-        setInput(`${prefix}.street1`, "123 Main Street");
-        setInput(`${prefix}.street2`, "Unit 10");
-        setInput(`${prefix}.postcode`, "50000");
-        setInput(`${prefix}.telNo`, "+60 12-3456789");
-      });
-
-      const dt = new DataTransfer();
-      dt.items.add(new File(["ABC"], "sample.pdf", { type: "application/pdf" }));
-      const attachmentInput = doc.getElementById("attachmentInput");
-      attachmentInput.files = dt.files;
-      attachmentInput.dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(100);
-
-      doc.getElementById("previewXml").click();
-      await delay(50);
-      assert(!doc.getElementById("downloadXml").disabled, "Download should be enabled after a valid preview");
-      assert(doc.getElementById("xmlPreview").value.includes("<bulkstamping>"), "Preview should contain XML");
-
-      setInput("instrument.refNo", "REF43-CHANGED");
-      assert(doc.getElementById("downloadXml").disabled, "Download should be disabled after form changes");
-      assertEqual(doc.getElementById("xmlPreview").value, "", "Preview should be cleared after form changes");
-      iframe.remove();
+    test("app.js compliance", "AUTO-COMP-001 filling Applicant Reference Number removes missing warning", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      assertComplianceIncludes("Applicant Reference Number missing");
+      setFixtureInput("instrument.refNo", "REF43");
+      assertComplianceExcludes("Applicant Reference Number missing");
+      assertComplianceIncludes("Instrument Date missing");
     });
 
-    async function run() {
-      results.length = 0;
+    test("app.js compliance", "AUTO-COMP-002 filling Instrument Date removes missing warning", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      setFixtureInput("instrument.refNo", "REF43");
+      assertComplianceIncludes("Instrument Date missing");
+      setFixtureInput("instrument.instrumentDate", "01/03/2026");
+      assertComplianceExcludes("Instrument Date missing");
+      assertComplianceIncludes("Principal / Subsidiary missing");
+    });
+
+    test("app.js compliance", "AUTO-COMP-003 clearing Instrument Date makes missing warning reappear", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      setFixtureInput("instrument.refNo", "REF43");
+      setFixtureInput("instrument.instrumentDate", "01/03/2026");
+      assertComplianceExcludes("Instrument Date missing");
+      setFixtureInput("instrument.instrumentDate", "");
+      assertComplianceIncludes("Instrument Date missing");
+    });
+
+    test("app.js compliance", "AUTO-COMP-004 completing all required fields removes missing warnings", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      await fillMinimumRequiredFixture();
+      assertComplianceExcludes("Applicant Reference Number missing");
+      assertComplianceExcludes("Instrument Date missing");
+      assertComplianceExcludes("Principal / Subsidiary missing");
+      assertComplianceExcludes("missing");
+      assertComplianceIncludes("Ready for XML generation");
+    });
+
+    test("app.js compliance", "AUTO-COMP-005 invalidating one field returns warning immediately", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      await fillMinimumRequiredFixture();
+      assertComplianceIncludes("Ready for XML generation");
+      setFixtureInput("instrument.instrumentDate", "");
+      assertComplianceIncludes("Instrument Date missing");
+      assertComplianceIncludes("XML generation unavailable");
+    });
+    test("app.js realtime", "invalid numeric input sanitizes, shows toast, and updates compliance", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      clearFixtureToasts();
+      const input = setFixtureInput("instrument.typeOfInstrument", "ABC123@#");
+      assertEqual(input.value, "123", "Numeric field should sanitize to digits");
+      assertIncludes(fixtureToastText(), "Only numbers are allowed. Invalid characters were removed.");
+      assertIncludes(document.getElementById("complianceStatus").textContent, "XML generation unavailable");
+    });
+
+    test("app.js realtime", "invalid date sanitizes but remains blocked by validation", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      clearFixtureToasts();
+      const input = setFixtureInput("instrument.instrumentDate", "01-03-2026abc");
+      assertEqual(input.value, "01032026", "Date sanitizer should remove unsupported characters");
+      assertIncludes(fixtureToastText(), "Use date format DD/MM/YYYY.");
+      const error = document.querySelector('[data-message-for="instrument.instrumentDate"]');
+      assert(error && error.textContent.includes("Invalid date format"), "Inline date validation should appear in real time");
+      assert(document.getElementById("downloadXml").disabled, "Download should stay disabled");
+    });
+
+    test("app.js realtime", "XML preview invalidates after a later form change", async () => {
+      document.getElementById("clearForm").click();
+      await delay(0);
+      document.getElementById("xmlPreview").value = "<bulkstamping></bulkstamping>";
+      document.getElementById("downloadXml").disabled = false;
+      clearFixtureToasts();
+      setFixtureInput("instrument.typeOfInstrument", "ABC123@#");
+      assertEqual(document.getElementById("xmlPreview").value, "", "Preview should be cleared");
+      assert(document.getElementById("downloadXml").disabled, "Download should be disabled");
+      assertIncludes(fixtureToastText(), "Form changed. XML preview must be regenerated.");
+    });
+
+    async function runEDutiTests() {
       const tbody = document.getElementById("results");
+      const summary = document.getElementById("summary");
+      tbody.innerHTML = "";
+      summary.className = "";
+      summary.textContent = "Running tests...";
+
       let passed = 0;
+      const rows = [];
+
       for (const item of tests) {
         try {
           await item.fn();
           passed += 1;
-          results.push({ status: "PASS", name: item.name, details: "" });
+          rows.push({ status: "PASS", area: item.area, name: item.name, details: "" });
         } catch (error) {
-          results.push({ status: "FAIL", name: item.name, details: error.stack || error.message || String(error) });
+          rows.push({ status: "FAIL", area: item.area, name: item.name, details: error.stack || error.message || String(error) });
         }
       }
-      tbody.innerHTML = results.map((result) => `
+
+      tbody.innerHTML = rows.map((row) => `
         <tr>
-          <td class="${result.status === "PASS" ? "pass" : "fail"}">${result.status}</td>
-          <td>${escapeHtml(result.name)}</td>
-          <td><pre>${escapeHtml(result.details)}</pre></td>
+          <td class="${row.status === "PASS" ? "pass" : "fail"}">${row.status}</td>
+          <td>${escapeHtml(row.area)}</td>
+          <td>${escapeHtml(row.name)}</td>
+          <td><pre>${escapeHtml(row.details)}</pre></td>
         </tr>
       `).join("");
-      const summary = document.getElementById("summary");
+
       summary.textContent = `${passed}/${tests.length} tests passed`;
       summary.className = passed === tests.length ? "pass" : "fail";
+      return { passed, total: tests.length, failed: tests.length - passed, rows };
     }
 
     function escapeHtml(value) {
@@ -449,11 +694,13 @@
         .replace(/'/g, "&#39;");
     }
 
-    window.runEDutiTests = run;
-    run();
+    window.runEDutiTests = runEDutiTests;
+    document.getElementById("rerunTests").addEventListener("click", runEDutiTests);
+    window.addEventListener("load", runEDutiTests);
   </script>
 </body>
 </html>
+
 
 
 

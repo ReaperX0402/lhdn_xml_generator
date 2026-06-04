@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const state = {
     applicationType: "43",
     instrument: {},
@@ -10,6 +10,17 @@
   };
 
   const els = {};
+  const toastTimers = new Map();
+  const toastLastSeen = new Map();
+  const toastDurationMs = 3000;
+  const toastDedupeMs = 2000;
+
+  window.EDutiAppFeedback = {
+    getSanitizationMessage,
+    createToast,
+    toastDurationMs,
+    toastDedupeMs
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -19,7 +30,7 @@
     renderApplicationOptions();
     renderAll();
     bindEvents();
-    updateComplianceStatus(null);
+    runRealtimeValidation();
   }
 
   function bindElements() {
@@ -39,7 +50,8 @@
       downloadXml: document.getElementById("downloadXml"),
       clearForm: document.getElementById("clearForm"),
       xmlPreview: document.getElementById("xmlPreview"),
-      complianceStatus: document.getElementById("complianceStatus")
+      complianceStatus: document.getElementById("complianceStatus"),
+      toastContainer: document.getElementById("toastContainer")
     });
   }
 
@@ -47,20 +59,21 @@
     els.applicationType.addEventListener("change", () => {
       state.applicationType = els.applicationType.value;
       state.instrument = {};
-      state.latestXml = "";
-      els.xmlPreview.value = "";
+      invalidatePreview(false);
       renderAll();
-      updateComplianceStatus(null);
+      runRealtimeValidation();
     });
 
     els.addTransferor.addEventListener("click", () => {
       state.transferors.push(emptyParty());
       renderParties();
+      runRealtimeValidation();
     });
 
     els.addTransferee.addEventListener("click", () => {
       state.transferees.push(emptyParty());
       renderParties();
+      runRealtimeValidation();
     });
 
     els.attachmentInput.addEventListener("change", handleAttachments);
@@ -69,7 +82,7 @@
     els.clearForm.addEventListener("click", () => {
       resetState();
       renderAll();
-      updateComplianceStatus(null);
+      runRealtimeValidation();
     });
   }
 
@@ -105,7 +118,6 @@
     renderSection("exemption", els.exemptionFields);
     renderParties();
     renderAttachments();
-    clearFieldErrors();
     els.downloadXml.disabled = !state.latestXml;
   }
 
@@ -137,20 +149,16 @@
         const name = button.dataset.removeParty;
         const index = Number(button.dataset.index);
         state[name].splice(index, 1);
-        state.latestXml = "";
-        els.xmlPreview.value = "";
-        els.downloadXml.disabled = true;
+        invalidatePreview(true);
         renderParties();
-        updateComplianceStatus(null);
+        runRealtimeValidation();
       });
     });
   }
 
   function fieldHtml(field, errorKey, value) {
-    const required = field.mandatory ? " required" : "";
+    const requiredMark = field.mandatory ? ` <span class="required-mark" aria-hidden="true">*</span>` : "";
     const placeholder = field.placeholder ? ` placeholder="${field.placeholder}"` : "";
-    const maxLength = window.EDutiConfig.getFieldMaxLength(field, state.applicationType);
-    const hint = maxLength ? `<span class="hint">Max ${maxLength} characters</span>` : "";
     let input = "";
 
     if (field.inputType === "select") {
@@ -161,36 +169,40 @@
       input = `<input type="text" data-error-key="${errorKey}" data-key="${field.key}" value="${escapeHtml(value)}"${placeholder}>`;
     }
 
-    return `<label class="field"><span>${field.label}${required}</span>${input}${hint}<span class="field-error" data-error-for="${errorKey}"></span></label>`;
+    return `<label class="field" data-field-wrapper="${errorKey}"><span class="field-label-text">${field.label}${requiredMark}</span>${input}<span class="field-message" data-message-for="${errorKey}"></span></label>`;
   }
 
   function bindField(container, field, target, key, explicitErrorKey) {
     const selector = explicitErrorKey ? `[data-error-key="${explicitErrorKey}"]` : `[data-error-key="instrument.${field.key}"]`;
     const input = container.querySelector(selector);
     if (!input) return;
-    input.addEventListener("input", () => {
-      const sanitized = window.EDutiSanitizer.sanitizeValue(input.value, field.sanitize);
-      if (sanitized !== input.value) input.value = sanitized;
+
+    const syncInput = () => {
+      const rawValue = input.value;
+      const sanitized = window.EDutiSanitizer.sanitizeValue(rawValue, field.sanitize);
+      if (sanitized !== rawValue) {
+        input.value = sanitized;
+        showToast(getSanitizationMessage(field), "info");
+      }
       target[key] = sanitized;
-      state.latestXml = "";
-      els.xmlPreview.value = "";
-      els.downloadXml.disabled = true;
-      clearOneError(input.dataset.errorKey);
-    });
-    input.addEventListener("change", () => {
-      target[key] = window.EDutiSanitizer.sanitizeValue(input.value, field.sanitize);
-      input.value = target[key];
-    });
+      invalidatePreview(true);
+      runRealtimeValidation();
+    };
+
+    input.addEventListener("input", syncInput);
+    input.addEventListener("change", syncInput);
+    input.addEventListener("blur", syncInput);
   }
 
   async function handleAttachments(event) {
     const result = await window.EDutiFileHandler.processFiles(event.target.files);
     state.attachments.push(...result.accepted);
-    state.latestXml = "";
-    els.xmlPreview.value = "";
-    els.downloadXml.disabled = true;
+    invalidatePreview(true);
     renderAttachments(result.errors, result.warnings);
+    if (result.errors.length) showToast("Only PDF, JPEG, PNG and GIF files are accepted.", "warning");
+    if (result.accepted.length) showToast("Attachment added.", "success");
     event.target.value = "";
+    runRealtimeValidation();
   }
 
   function renderAttachments(errors, warnings) {
@@ -201,14 +213,14 @@
     els.attachmentList.querySelectorAll("[data-remove-attachment]").forEach((button) => {
       button.addEventListener("click", () => {
         state.attachments.splice(Number(button.dataset.removeAttachment), 1);
-        state.latestXml = "";
-        els.xmlPreview.value = "";
-        els.downloadXml.disabled = true;
+        invalidatePreview(true);
         renderAttachments();
+        runRealtimeValidation();
       });
     });
 
     const messages = [];
+    if (!state.attachments.length) messages.push(`<p class="warning-text">Only PDF, JPEG, PNG and GIF files are accepted. At least one attachment is required.</p>`);
     (errors || []).forEach((message) => messages.push(`<p class="error-text">${escapeHtml(message)}</p>`));
     (warnings || []).forEach((message) => messages.push(`<p class="warning-text">${escapeHtml(message)}</p>`));
     els.attachmentMessages.innerHTML = messages.join("");
@@ -231,15 +243,15 @@
     showValidationResult(result);
 
     if (!result.valid) {
-      state.latestXml = "";
-      els.xmlPreview.value = "";
-      els.downloadXml.disabled = true;
+      invalidatePreview(false);
+      showToast("XML generation unavailable. Fix validation errors first.", "error");
       return;
     }
 
     state.latestXml = window.EDutiXmlGenerator.generateXml(result.data);
     els.xmlPreview.value = state.latestXml;
     els.downloadXml.disabled = false;
+    showToast("XML preview generated.", "success");
   }
 
   function downloadXml() {
@@ -263,48 +275,180 @@
     renderAll();
   }
 
+  function invalidatePreview(showChangedToast) {
+    const hadPreview = Boolean(state.latestXml || (els.xmlPreview && els.xmlPreview.value));
+    state.latestXml = "";
+    if (els.xmlPreview) els.xmlPreview.value = "";
+    if (els.downloadXml) els.downloadXml.disabled = true;
+    if (showChangedToast && hadPreview) showToast("Form changed. XML preview must be regenerated.", "warning");
+  }
+
+  function runRealtimeValidation() {
+    const result = window.EDutiValidation.validateData(collectRawData());
+    state.latestValidation = result;
+    showValidationResult(result);
+    return result;
+  }
+
   function showValidationResult(result) {
-    clearFieldErrors();
-    Object.entries(result.fieldErrors).forEach(([key, messages]) => {
-      const target = document.querySelector(`[data-error-for="${cssEscape(key)}"]`);
-      if (target) target.textContent = messages[0];
-    });
+    const fieldErrors = result.fieldErrors || {};
+    clearFieldMessages();
+    renderFieldMessages(fieldErrors);
     updateComplianceStatus(result);
   }
 
-  function clearFieldErrors() {
-    document.querySelectorAll(".field-error").forEach((el) => el.textContent = "");
+  function clearFieldMessages() {
+    document.querySelectorAll(".field-message").forEach((el) => {
+      el.textContent = "";
+      el.classList.remove("field-message--helper", "field-message--warning", "field-message--error");
+    });
+    document.querySelectorAll(".field.has-error").forEach((el) => el.classList.remove("has-error"));
   }
 
-  function clearOneError(key) {
-    const target = document.querySelector(`[data-error-for="${cssEscape(key)}"]`);
-    if (target) target.textContent = "";
+  function renderFieldMessages(fieldErrors) {
+    window.EDutiConfig.getFieldsForApplication(state.applicationType).forEach((field) => {
+      renderSingleFieldMessage(field, state.instrument[field.key] || "", `instrument.${field.key}`, fieldErrors[`instrument.${field.key}`]);
+    });
+    state.transferors.forEach((party, index) => {
+      window.EDutiConfig.partyFields.forEach((field) => renderSingleFieldMessage(field, party[field.key] || "", `transferors.${index}.${field.key}`, fieldErrors[`transferors.${index}.${field.key}`]));
+    });
+    state.transferees.forEach((party, index) => {
+      window.EDutiConfig.partyFields.forEach((field) => renderSingleFieldMessage(field, party[field.key] || "", `transferees.${index}.${field.key}`, fieldErrors[`transferees.${index}.${field.key}`]));
+    });
+  }
+
+  function renderSingleFieldMessage(field, value, key, errors) {
+    const target = document.querySelector(`[data-message-for="${cssEscape(key)}"]`);
+    const wrapper = document.querySelector(`[data-field-wrapper="${cssEscape(key)}"]`);
+    if (!target) return;
+
+    const message = getGuidanceMessage(field, value, errors);
+    target.textContent = message.text;
+    target.classList.toggle("field-message--error", message.type === "error");
+    target.classList.toggle("field-message--warning", message.type === "warning");
+    target.classList.toggle("field-message--helper", message.type === "helper");
+    if (wrapper) wrapper.classList.toggle("has-error", message.type === "error");
+  }
+
+  function getGuidanceMessage(field, value, errors) {
+    if (errors && errors.length) return { type: "error", text: normalizeValidationMessage(field, errors[0]) };
+    const warning = getFieldWarning(field, value);
+    if (warning) return { type: "warning", text: warning };
+    const helper = getFieldHelper(field, value);
+    return helper ? { type: "helper", text: helper } : { type: "", text: "" };
+  }
+
+  function normalizeValidationMessage(field, message) {
+    const maxLength = window.EDutiConfig.getFieldMaxLength(field, state.applicationType);
+    if (maxLength && message.includes(`exceeds ${maxLength} characters`)) {
+      return `${field.label} must not exceed ${maxLength} characters.`;
+    }
+    return message;
+  }
+
+  function getFieldWarning(field, value) {
+    const maxLength = window.EDutiConfig.getFieldMaxLength(field, state.applicationType);
+    if (field.key === "icNo" && value && value.length > 0 && value.length < 12) return "IC Number should contain 12 digits.";
+    if (field.key === "telNo" && value && value.length > 20) return "Telephone Number should not exceed 20 characters.";
+    if (maxLength && value && value.length >= Math.ceil(maxLength * 0.9) && value.length <= maxLength) {
+      return `Approaching maximum length: ${value.length}/${maxLength} characters.`;
+    }
+    return "";
+  }
+
+  function getFieldHelper(field, value) {
+    const maxLength = window.EDutiConfig.getFieldMaxLength(field, state.applicationType);
+    return maxLength ? `Max ${maxLength} characters` : "";
+  }
+
+  function getSanitizationMessage(fieldOrType) {
+    const sanitize = typeof fieldOrType === "string" ? fieldOrType : fieldOrType.sanitize;
+    if (sanitize === "digitsOnly") return "Only numbers are allowed. Invalid characters were removed.";
+    if (sanitize === "decimalNumber") return "Only decimal numbers are allowed. Invalid characters were removed.";
+    if (sanitize === "date") return "Use date format DD/MM/YYYY.";
+    if (sanitize === "phone") return "Only phone number characters are allowed.";
+    if (sanitize === "alphanumeric") return "Only letters and numbers are allowed.";
+    if (sanitize === "textFlexible") return "Unsupported characters were removed.";
+    return "Unsupported characters were removed.";
+  }
+
+  function showToast(message, type) {
+    if (!els.toastContainer) return null;
+    return createToast(els.toastContainer, message, type || "info");
+  }
+
+  function createToast(container, message, type) {
+    const now = Date.now();
+    const existing = container.querySelector(`[data-toast-message="${cssEscape(message)}"]`);
+    if (existing && now - Number(existing.dataset.lastSeen || 0) < toastDedupeMs) {
+      existing.dataset.lastSeen = String(now);
+      scheduleToastRemoval(existing, message);
+      return existing;
+    }
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast--${type || "info"}`;
+    toast.dataset.toastMessage = message;
+    toast.dataset.lastSeen = String(now);
+    toast.innerHTML = `<span class="toast__message">${escapeHtml(message)}</span><button type="button" class="toast__close" aria-label="Close notification">&times;</button>`;
+    toast.querySelector("button").addEventListener("click", () => removeToast(toast, message));
+    container.appendChild(toast);
+    scheduleToastRemoval(toast, message);
+    return toast;
+  }
+
+  function scheduleToastRemoval(toast, message) {
+    if (toastTimers.has(message)) clearTimeout(toastTimers.get(message));
+    toastTimers.set(message, setTimeout(() => removeToast(toast, message), toastDurationMs));
+  }
+
+  function removeToast(toast, message) {
+    if (toastTimers.has(message)) {
+      clearTimeout(toastTimers.get(message));
+      toastTimers.delete(message);
+    }
+    if (toast && toast.parentNode) toast.remove();
+  }
+
+  function getComplianceIssues(result) {
+    if (!result || result.valid) return [];
+    return (result.errors || []).map(summarizeComplianceError);
   }
 
   function updateComplianceStatus(result) {
     if (!result) {
-      els.complianceStatus.innerHTML = `<h3>XML Compliance Status</h3><p>Select an application type, complete the form, add at least one attachment, then preview XML.</p>`;
+      els.complianceStatus.innerHTML = `<h3>XML Compliance Status</h3><p>Complete the form and add at least one attachment.</p>`;
       return;
     }
 
-    if (result.valid) {
+    const issues = getComplianceIssues(result);
+    if (!issues.length) {
       els.complianceStatus.innerHTML = `
         <h3>XML Compliance Status</h3>
         <ul class="status-list success">
-          <li>[OK] Required fields validated</li>
-          <li>[OK] Data types validated</li>
-          <li>[OK] Conditional mandatory fields validated</li>
-          <li>[OK] Attachments validated</li>
-          <li>[OK] XML structure ready</li>
+          <li>✓ All required fields completed</li>
+          <li>✓ Attachments validated</li>
+          <li>✓ XML structure ready</li>
         </ul>
-        <p class="status-ready">Ready for XML generation</p>`;
+        <p class="status-ready">✓ Ready for XML generation</p>`;
       return;
     }
 
     els.complianceStatus.innerHTML = `
       <h3>XML Compliance Status</h3>
-      <ul class="status-list failure">${result.errors.map((message) => `<li>[X] ${escapeHtml(message)}</li>`).join("")}</ul>
+      <ul class="status-list failure">${issues.map((message) => `<li>[X] ${escapeHtml(message)}</li>`).join("")}</ul>
       <p class="status-blocked">XML generation unavailable</p>`;
+  }
+
+  function summarizeComplianceError(message) {
+    return message
+      .replace("Applicant Reference Number is required.", "Applicant Reference Number missing")
+      .replace("Instrument Date is required.", "Instrument Date missing")
+      .replace("Principal / Subsidiary is required.", "Principal / Subsidiary missing")
+      .replace("At least one attachment is required.", "Attachment missing")
+      .replace(" is required.", " missing")
+      .replace(": Invalid date format. Use DD/MM/YYYY.", " invalid. Use DD/MM/YYYY.");
   }
 
   function escapeHtml(value) {
@@ -321,4 +465,7 @@
     return String(value).replace(/[^A-Za-z0-9_-]/g, "\\$&");
   }
 })();
+
+
+
 
