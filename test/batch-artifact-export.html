@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Batch Artifact Export</title>
+</head>
+<body>
+  <pre id="results">Running...</pre>
+
+  <div id="fixture" hidden>
+    <section id="batchSection"></section>
+    <input id="batchXlsxInput" type="file">
+    <div id="batchSelectedFile"></div>
+    <div id="batchUploadMessages"></div>
+    <button id="batchValidateBtn"></button>
+    <button id="batchAssignAttachmentsBtn"></button>
+    <button id="batchGenerateBtn"></button>
+    <button id="batchClearBtn"></button>
+    <button id="viewBatchGuideBtn"></button>
+    <div id="batchSummary"></div>
+    <span id="batchTotalRows"></span>
+    <span id="batchValidRows"></span>
+    <span id="batchNeedAttachmentRows"></span>
+    <span id="batchInvalidRows"></span>
+    <span id="batchSkippedRows"></span>
+    <span id="batchReadyXmlCount"></span>
+    <table id="batchResultsTable"><tbody id="batchResultsBody"></tbody></table>
+    <div id="batchMessages"></div>
+    <div id="batchAttachmentModal" style="display: none;"></div>
+    <div id="batchAttachmentList"></div>
+    <button id="batchAttachmentSaveBtn"></button>
+    <button id="batchAttachmentCloseBtn"></button>
+    <button id="batchAttachmentModalClose"></button>
+    <div id="batchGuideModal" style="display: none;"></div>
+    <div id="batchGuideContent"></div>
+    <button id="batchGuideCloseBtn"></button>
+    <button id="batchGuideModalClose"></button>
+
+    <select id="applicationType"></select>
+    <div id="generalFields"></div>
+    <div id="instrumentFields"></div>
+    <div id="exemptionFields"></div>
+    <div id="transferors"></div>
+    <div id="transferees"></div>
+    <button id="addTransferor"></button>
+    <button id="addTransferee"></button>
+    <input id="attachmentInput" type="file">
+    <ul id="attachmentList"></ul>
+    <div id="attachmentMessages"></div>
+    <button id="previewXml"></button>
+    <button id="downloadXml"></button>
+    <button id="clearForm"></button>
+    <textarea id="xmlPreview"></textarea>
+    <aside id="complianceStatus"></aside>
+    <div id="toastContainer"></div>
+  </div>
+
+  <script>
+    window.JSZip = function () {};
+    window.JSZip.prototype.file = function () {};
+    window.JSZip.prototype.generateAsync = function () {
+      return Promise.resolve(new Blob());
+    };
+  </script>
+  <script src="field-config.js"></script>
+  <script src="sanitizer.js"></script>
+  <script src="file-handler.js"></script>
+  <script src="validation.js"></script>
+  <script src="lampiran_lookup.js"></script>
+  <script src="xml-generator.js"></script>
+  <script src="xlsx_converter.js"></script>
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener("load", function () {
+      function row(refNo, rowOffset) {
+        return [
+          "Penyeteman Am",
+          refNo,
+          46175 + rowOffset,
+          46175 + rowOffset,
+          "Principal",
+          "Agreement " + refNo,
+          "Company",
+          "Transferor " + refNo,
+          "",
+          "",
+          "200601035342",
+          "Local",
+          "Address 1 " + refNo,
+          "Address 2 " + refNo,
+          "11900",
+          "Bayan Lepas",
+          "Pulau Pinang",
+          "MALAYSIA",
+          "6041234567",
+          "Company",
+          "Transferee " + refNo,
+          "",
+          "",
+          "316392h",
+          "Foreign",
+          "Address 1 Buyer " + refNo,
+          "Address 2 Buyer " + refNo,
+          "4782",
+          "St Florian",
+          "Luar Negara",
+          "AUSTRALIA",
+          "43771253110",
+          "10",
+          "Agreement information " + refNo
+        ];
+      }
+
+      try {
+        const rows = [
+          [
+            "",
+            "General Information",
+            "",
+            "",
+            "",
+            "",
+            "Transferor",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Transferee",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Instrument Information",
+            ""
+          ],
+          [
+            "Application Type",
+            "Applicant Reference Number",
+            "Instrument Date",
+            "Date Instrument Received in Malaysia",
+            "Principal / Subsidiary",
+            "Type of Instrument Others/Agreement Title",
+            "Party Type",
+            "Name",
+            "Nationality",
+            "IC Number",
+            "Company Registration Number ",
+            "Business Type",
+            "Address Line 1",
+            "Address Line 2",
+            "Postcode",
+            "City",
+            "State",
+            "Country",
+            "Tel Number",
+            "Party Type",
+            "Name",
+            "Nationality",
+            "IC Number",
+            "Company Registration Number ",
+            "Business Type",
+            "Address Line 1",
+            "Address Line 2",
+            "Postcode",
+            "City",
+            "State",
+            "Country",
+            "Tel Number",
+            "Payment/Consideration Amount",
+            "Agreement Information"
+          ],
+          row("ZIP-001", 0),
+          row("ZIP-002", 1),
+          row("ZIP-003", 2)
+        ];
+
+        const conversion = window.EDutiXlsxConverter._test.convertXlsxRows(rows, "43");
+        const files = conversion.submissions.map(function (submission, index) {
+          submission.attachments.push({
+            name: "attachment-" + (index + 1) + ".pdf",
+            base64: "QUJD",
+            size: 3,
+            type: "application/pdf"
+          });
+          window.EDutiXlsxConverter.validateSubmission(submission);
+          if (submission.status !== "valid") {
+            throw new Error("Submission " + (index + 1) + " is not valid: " + submission.errors.join("; "));
+          }
+          return {
+            name: "eduti_" + submission.rowNumber + "_" + submission.refNo + ".xml",
+            base64: btoa(unescape(encodeURIComponent(window.EDutiXlsxConverter.generateSubmissionXml(submission))))
+          };
+        });
+
+        document.getElementById("results").textContent = JSON.stringify({
+          ok: true,
+          files: files
+        });
+      } catch (error) {
+        document.getElementById("results").textContent = JSON.stringify({
+          ok: false,
+          error: error.stack || error.message || String(error)
+        });
+      }
+    });
+  </script>
+</body>
+</html>
