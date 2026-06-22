@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>e-Duti Setem XML Generator</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- XLSX Library -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"></script>
+  <!-- JSZip Library for ZIP downloads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -15,7 +19,78 @@
   </header>
 
   <main class="app-shell">
-    <section class="panel compact">
+    <!-- Batch XML Generation Section -->
+    <section class="panel batch-section" id="batchSection">
+      <div class="section-header">
+        <h2>Batch XML Generation from XLSX</h2>
+        <button type="button" id="viewBatchGuideBtn" class="secondary">View Batch Conversion Guide</button>
+      </div>
+
+      <!-- XLSX Upload -->
+      <div class="batch-upload-area">
+        <div class="upload-row">
+          <label class="upload-button" for="batchXlsxInput">Upload XLSX</label>
+          <input id="batchXlsxInput" type="file" accept=".xlsx,.xls">
+          <span class="hint">Select an Excel file containing batch submission data</span>
+        </div>
+        <div id="batchSelectedFile" class="batch-selected-file"></div>
+        <div id="batchUploadMessages" class="message-stack"></div>
+      </div>
+
+      <!-- Batch Action Buttons -->
+      <div class="batch-button-group">
+        <button type="button" id="batchValidateBtn" disabled>Validate XLSX</button>
+        <button type="button" id="batchAssignAttachmentsBtn" disabled>Assign Attachments</button>
+        <button type="button" id="batchGenerateBtn" disabled>Generate Batch XML</button>
+        <button type="button" id="batchClearBtn" disabled>Clear Batch</button>
+      </div>
+
+      <!-- Batch Summary -->
+      <div id="batchSummary" class="batch-summary" style="display: none;">
+        <h3>Batch Summary</h3>
+        <div class="summary-stats">
+          <div class="stat"><strong>Total rows processed:</strong> <span id="batchTotalRows">0</span></div>
+          <div class="stat"><strong>Valid rows:</strong> <span id="batchValidRows">0</span></div>
+          <div class="stat"><strong>Rows needing attachment:</strong> <span id="batchNeedAttachmentRows">0</span></div>
+          <div class="stat"><strong>Invalid rows:</strong> <span id="batchInvalidRows">0</span></div>
+          <div class="stat"><strong>Skipped rows:</strong> <span id="batchSkippedRows">0</span></div>
+          <div class="stat"><strong>XML files ready:</strong> <span id="batchReadyXmlCount">0</span></div>
+        </div>
+      </div>
+
+      <!-- Batch Results Table -->
+      <div id="batchResultsTable" class="batch-results" style="display: none;">
+        <h3>Batch Submission Results</h3>
+        <div class="table-scroll">
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>Row</th>
+                <th>Reference No</th>
+                <th>Application Type</th>
+                <th>Data Status</th>
+                <th>Attachment Status</th>
+                <th>Final Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="batchResultsBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Batch Messages -->
+      <div id="batchMessages" class="message-stack"></div>
+    </section>
+
+    <!-- Manual Form Section -->
+    <section class="panel manual-form-divider">
+      <h2 style="border-top: 2px solid #ccc; padding-top: 1rem;">Manual XML Generation</h2>
+      <p style="color: #666; font-size: 0.9rem;">Or enter data manually below</p>
+    </section>
+
+    <section class="panel">
       <h2>Application Type</h2>
       <label class="field single-field">
         <span>Application Type required</span>
@@ -83,12 +158,52 @@
 
   <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
+  <!-- Modal for Batch Attachment Assignment -->
+  <div id="batchAttachmentModal" class="modal" style="display: none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Assign Attachments to Batch Submissions</h2>
+        <button type="button" class="modal-close" id="batchAttachmentModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="batchAttachmentList" class="batch-attachment-list">
+          <!-- Submission cards will be inserted here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="batchAttachmentSaveBtn">Save Attachment Assignments</button>
+        <button type="button" id="batchAttachmentCloseBtn" class="secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Batch Conversion Guide -->
+  <div id="batchGuideModal" class="modal" style="display: none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content large">
+      <div class="modal-header">
+        <h2>Batch Conversion Guide</h2>
+        <button type="button" class="modal-close" id="batchGuideModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="batchGuideContent" class="guide-content">
+          <!-- Guide markdown will be inserted here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="batchGuideCloseBtn" class="secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script src="field-config.js"></script>
   <script src="sanitizer.js"></script>
   <script src="file-handler.js"></script>
   <script src="validation.js"></script>
+  <script src="lampiran_lookup.js"></script>
   <script src="xml-generator.js"></script>
+  <script src="xlsx_converter.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
-

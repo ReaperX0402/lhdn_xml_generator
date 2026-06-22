@@ -183,6 +183,15 @@
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    async function waitFor(condition, message, timeoutMs = 1000) {
+      const started = Date.now();
+      while (Date.now() - started < timeoutMs) {
+        if (condition()) return;
+        await delay(25);
+      }
+      throw new Error(message || "Timed out waiting for condition");
+    }
+
     function setFixtureInput(key, value) {
       const input = document.querySelector(`#appFixture [data-error-key="${key}"]`);
       assert(input, `${key} input not found`);
@@ -219,7 +228,7 @@
       files.items.add(new File(["ABC"], "sample.pdf", { type: "application/pdf" }));
       input.files = files.files;
       input.dispatchEvent(new Event("change", { bubbles: true }));
-      await delay(25);
+      await waitFor(() => document.getElementById("attachmentList").textContent.includes("sample.pdf"), "Attachment fixture did not render");
     }
     async function fillMinimumRequiredFixture() {
       setFixtureInput("instrument.refNo", "REF43");

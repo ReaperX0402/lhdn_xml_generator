@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LHDN Template Batch Parser Test</title>
+</head>
+<body>
+  <pre id="results">Running...</pre>
+
+  <script src="field-config.js"></script>
+  <script src="sanitizer.js"></script>
+  <script src="validation.js"></script>
+  <script src="lampiran_lookup.js"></script>
+  <script src="xml-generator.js"></script>
+  <script src="xlsx_converter.js"></script>
+  <script>
+    (function () {
+      const output = [];
+
+      function pass(message) {
+        output.push("PASS: " + message);
+      }
+
+      function fail(message) {
+        output.push("FAIL: " + message);
+      }
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+        pass(message);
+      }
+
+      function run() {
+        assert(window.EDutiLampiran.resolveCountry("MALAYSIA").code === "146", "Lampiran C maps MALAYSIA to 146");
+        assert(window.EDutiLampiran.resolveCountry("United States Of America").code === "219", "Lampiran C maps United States Of America to 219");
+        assert(window.EDutiLampiran.resolveTaxBranch("Johor Bahru").code === "1", "Lampiran D maps Johor Bahru to 1");
+        assert(window.EDutiLampiran.resolveState("Pulau Pinang").code === "9", "Lampiran E maps Pulau Pinang to 9");
+        assert(window.EDutiLampiran.resolveState("Selangor").code === "12", "Lampiran E maps Selangor to 12");
+        assert(window.EDutiLampiran.resolveExemption("P.U.(A) 58/2003").code === "1070", "Lampiran F Jadual 1 maps exemption name to 1070");
+        assert(window.EDutiLampiran.resolveRemission("P.U.(A) 315/2000").code === "1071", "Lampiran F Jadual 2 maps remission name to 1071");
+
+        const rows = [
+          [
+            "",
+            "General Information",
+            "",
+            "",
+            "",
+            "",
+            "Transferor",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Transferee",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Instrument Information",
+            ""
+          ],
+          [
+            "Application Type",
+            "Applicant Reference Number",
+            "Instrument Date",
+            "Date Instrument Received in Malaysia",
+            "Principal / Subsidiary",
+            "Type of Instrument Others/Agreement Title",
+            "Party Type",
+            "Name",
+            "Nationality",
+            "IC Number",
+            "Company Registration Number ",
+            "Business Type",
+            "Address Line 1",
+            "Address Line 2",
+            "Postcode",
+            "City",
+            "State",
+            "Country",
+            "Tel Number",
+            "Party Type",
+            "Name",
+            "Nationality",
+            "IC Number",
+            "Company Registration Number ",
+            "Business Type",
+            "Address Line 1",
+            "Address Line 2",
+            "Postcode",
+            "City",
+            "State",
+            "Country",
+            "Tel Number",
+            "Payment/Consideration Amount",
+            "Agreement Information"
+          ],
+          [
+            "Penyeteman Am",
+            "417-2066",
+            46175,
+            46175,
+            "Principal ",
+            "Non-Disclosurement Agreement",
+            "Company",
+            "PacTech Asia Sdn. Bhd.",
+            "",
+            "",
+            "200601035342",
+            "Local",
+            "No.14, Medan Bayan Lepas, Technoplex, Phase 4",
+            "Bayan Lepas Industrial Zone",
+            "11900",
+            "Bayan Lepas",
+            "9",
+            "146",
+            "46440986",
+            "Company",
+            "EV Group Europe & Asia/Pacific GmbH",
+            "",
+            "",
+            "316392h",
+            "Foreign",
+            "DI Erich Thallner StraBe 1",
+            "St. Florian am Inn",
+            "A-4782",
+            "",
+            "",
+            "10",
+            "43771253110",
+            "10",
+            "Non-Disclosure Agreement"
+          ]
+        ];
+
+        const conversion = window.EDutiXlsxConverter._test.convertXlsxRows(rows, "43");
+        assert(conversion.submissions.length === 1, "one data row is converted from the template");
+
+        const submission = conversion.submissions[0];
+        assert(submission.applicationType === "44", "Application Type text maps to code 44");
+        assert(submission.refNo === "417-2066", "Applicant Reference Number maps to submission refNo");
+        assert(submission.data.instrument.refNo === "417-2066", "Applicant Reference Number maps to instrument.refNo");
+        assert(submission.data.instrument.instrumentDate === "02/06/2026", "Excel serial date maps to DD/MM/YYYY");
+        assert(submission.data.instrument.typeOfInstrumentOthers === "Non-Disclosurement Agreement", "agreement title maps from General Information section");
+        assert(submission.data.instrument.payment === "10", "payment maps from Instrument Information section");
+        assert(submission.data.instrument.aggrementInfo === "Non-Disclosure Agreement", "agreement info maps from Instrument Information section");
+
+        assert(submission.data.transferors.length === 1, "transferor array is populated");
+        assert(submission.data.transferors[0].type === "1", "transferor company party type maps to code 1");
+        assert(submission.data.transferors[0].name === "PacTech Asia Sdn. Bhd.", "transferor name maps from merged section columns");
+        assert(submission.data.transferors[0].rocNo === "200601035342", "transferor company registration maps despite trailing header space");
+        assert(submission.data.transferors[0].busType === "1", "transferor business type Local maps to code 1");
+
+        assert(submission.data.transferees.length === 1, "transferee array is populated");
+        assert(submission.data.transferees[0].type === "1", "transferee company party type maps to code 1");
+        assert(submission.data.transferees[0].name === "EV Group Europe & Asia/Pacific GmbH", "transferee name maps from merged section columns");
+        assert(submission.data.transferees[0].rocNo === "316392h", "transferee company registration maps despite trailing header space");
+        assert(submission.data.transferees[0].busType === "2", "transferee business type Foreign maps to code 2");
+
+        window.EDutiXlsxConverter.validateSubmission(submission);
+        assert(submission.status === "needsAttachment", "valid template row without attachment is marked needsAttachment, not invalid");
+        assert(!submission.errors.some((message) => message.includes("Applicant Reference Number is required")), "reference number is not reported missing");
+        assert(!submission.errors.some((message) => message.includes("Name is required")), "party names are not reported missing");
+        assert(!submission.errors.some((message) => message.includes("Company Registration Number is required")), "company registration numbers are not reported missing");
+
+        submission.attachments.push({ name: "sample.pdf", base64: "QUJD", size: 3, type: "application/pdf" });
+        window.EDutiXlsxConverter.validateSubmission(submission);
+        assert(submission.status === "valid", "adding an attachment changes row status to valid");
+
+        const xml = window.EDutiXlsxConverter.generateSubmissionXml(submission);
+        const doc = new DOMParser().parseFromString(xml, "application/xml");
+        assert(doc.querySelectorAll("parsererror").length === 0, "generated XML is well formed");
+        assert(doc.querySelectorAll("instrument").length === 1, "generated XML contains one instrument");
+        assert(doc.querySelector("refNo").textContent === "417-2066", "generated XML contains template refNo");
+        assert(doc.querySelector("transferor name").textContent === "PacTech Asia Sdn. Bhd.", "generated XML contains transferor name");
+        assert(doc.querySelector("transferee name").textContent === "EV Group Europe & Asia/Pacific GmbH", "generated XML contains transferee name");
+
+        const invalidRows = JSON.parse(JSON.stringify(rows));
+        invalidRows[2][16] = "Penang Island";
+        const invalidSubmission = window.EDutiXlsxConverter._test.convertXlsxRows(invalidRows, "43").submissions[0];
+        window.EDutiXlsxConverter.validateSubmission(invalidSubmission);
+        assert(invalidSubmission.status === "invalid", "unknown Lampiran state makes row invalid");
+        assert(invalidSubmission.errors.some((message) => message.includes('Transferor State "Penang Island" does not match Lampiran E')), "unknown Lampiran state reports a clear row-level error");
+      }
+
+      try {
+        run();
+      } catch (error) {
+        fail(error.stack || error.message || String(error));
+      }
+
+      document.getElementById("results").textContent = output.join("\n");
+    })();
+  </script>
+</body>
+</html>
