@@ -767,6 +767,70 @@ window.EDutiXlsxConverter = (function () {
     }
   }
 
+  function submissionToXmlData(submission) {
+    return {
+      applicationType: submission.applicationType,
+      instrument: submission.data.instrument || {},
+      transferors: submission.data.transferors || [],
+      transferees: submission.data.transferees || [],
+      attachments: submission.attachments || []
+    };
+  }
+
+  function validateGeneratedXml(xml, expectedInstrumentCount) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, "application/xml");
+    if (doc.getElementsByTagName("parsererror").length > 0) {
+      throw new Error("Generated XML is not well-formed.");
+    }
+
+    if (expectedInstrumentCount != null && doc.getElementsByTagName("instrument").length !== expectedInstrumentCount) {
+      throw new Error(`Generated XML instrument count does not match expected count (${expectedInstrumentCount}).`);
+    }
+  }
+
+  function groupSubmissionsByApplicationType(submissions) {
+    const groups = {};
+    (submissions || []).forEach((submission) => {
+      const applicationType = submission.applicationType || "43";
+      if (!groups[applicationType]) groups[applicationType] = [];
+      groups[applicationType].push(submission);
+    });
+
+    return Object.keys(groups)
+      .sort()
+      .map((applicationType) => ({
+        applicationType,
+        submissions: groups[applicationType]
+      }));
+  }
+
+  /**
+   * Generate one bulkstamping XML per application type.
+   * Function name keeps the requested spelling: batch_insturment_1xml.
+   */
+  function batch_insturment_1xml(submissions) {
+    if (!window.EDutiXmlGenerator) {
+      throw new Error("XML generator not available.");
+    }
+
+    const readySubmissions = (submissions || []).filter((submission) => submission.status === "valid");
+    if (readySubmissions.length === 0) {
+      throw new Error("No valid submissions with attachments to generate.");
+    }
+
+    return groupSubmissionsByApplicationType(readySubmissions).map((group) => {
+      const xmlData = group.submissions.map(submissionToXmlData);
+      const xml = window.EDutiXmlGenerator.generateBulkXml(xmlData, group.applicationType);
+      validateGeneratedXml(xml, group.submissions.length);
+      return {
+        applicationType: group.applicationType,
+        submissions: group.submissions,
+        xml
+      };
+    });
+  }
+
   /**
    * Generate filename for batch XML
    * Format: eduti_ROWNUMBER_REFNO.xml
@@ -788,14 +852,35 @@ window.EDutiXlsxConverter = (function () {
     return `eduti_batch_${date}_${time}.zip`;
   }
 
+  function generateBatchInstrumentXmlFilename(applicationType, timestamp) {
+    const now = timestamp || new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const typeSuffix = applicationType ? `_type_${applicationType}` : "";
+    return `eduti_batch_instruments${typeSuffix}_${datePart}_${time}.xml`;
+  }
+
+  function generateBatchInstrumentZipFilename(timestamp) {
+    const now = timestamp || new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `eduti_batch_instruments_${datePart}_${time}.zip`;
+  }
+
   return {
     loadAndConvertXlsx,
     validateSubmission,
     generateSubmissionXml,
+    batch_insturment_1xml,
     generateXmlFilename,
     generateZipFilename,
+    generateBatchInstrumentXmlFilename,
+    generateBatchInstrumentZipFilename,
     _test: {
       convertXlsxRows,
+      groupSubmissionsByApplicationType,
       normalizeGroupedSections,
       findColumnMatch
     }

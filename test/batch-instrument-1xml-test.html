@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Batch Instrument 1 XML Test</title>
+</head>
+<body>
+  <pre id="results">Running...</pre>
+
+  <div id="fixture" hidden>
+    <section id="batchSection"></section>
+    <input id="batchXlsxInput" type="file">
+    <div id="batchSelectedFile"></div>
+    <div id="batchUploadMessages"></div>
+    <button id="batchValidateBtn"></button>
+    <button id="batchAssignAttachmentsBtn"></button>
+    <button id="batchGenerateBtn"></button>
+    <button id="batchInstrumentOneXmlBtn"></button>
+    <button id="batchClearBtn"></button>
+    <button id="viewBatchGuideBtn"></button>
+    <div id="batchSummary"></div>
+    <span id="batchTotalRows"></span>
+    <span id="batchValidRows"></span>
+    <span id="batchNeedAttachmentRows"></span>
+    <span id="batchInvalidRows"></span>
+    <span id="batchSkippedRows"></span>
+    <span id="batchReadyXmlCount"></span>
+    <table id="batchResultsTable"><tbody id="batchResultsBody"></tbody></table>
+    <div id="batchMessages"></div>
+    <div id="batchAttachmentModal" style="display: none;"></div>
+    <div id="batchAttachmentList"></div>
+    <button id="batchAttachmentSaveBtn"></button>
+    <button id="batchAttachmentCloseBtn"></button>
+    <button id="batchAttachmentModalClose"></button>
+    <div id="batchGuideModal" style="display: none;"></div>
+    <div id="batchGuideContent"></div>
+    <button id="batchGuideCloseBtn"></button>
+    <button id="batchGuideModalClose"></button>
+
+    <select id="applicationType"></select>
+    <div id="generalFields"></div>
+    <div id="instrumentFields"></div>
+    <div id="exemptionFields"></div>
+    <div id="transferors"></div>
+    <div id="transferees"></div>
+    <button id="addTransferor"></button>
+    <button id="addTransferee"></button>
+    <input id="attachmentInput" type="file">
+    <ul id="attachmentList"></ul>
+    <div id="attachmentMessages"></div>
+    <button id="previewXml"></button>
+    <button id="downloadXml"></button>
+    <button id="clearForm"></button>
+    <textarea id="xmlPreview"></textarea>
+    <aside id="complianceStatus"></aside>
+    <div id="toastContainer"></div>
+  </div>
+
+  <script>
+    window.JSZip = function () {
+      this.entries = {};
+    };
+    window.JSZip.prototype.file = function (name, content) {
+      this.entries[name] = content;
+    };
+    window.JSZip.prototype.generateAsync = function () {
+      return Promise.resolve({ entries: this.entries });
+    };
+  </script>
+  <script src="field-config.js"></script>
+  <script src="sanitizer.js"></script>
+  <script src="file-handler.js"></script>
+  <script src="validation.js"></script>
+  <script src="lampiran_lookup.js"></script>
+  <script src="xml-generator.js"></script>
+  <script src="xlsx_converter.js"></script>
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener("load", async function () {
+      const output = [];
+
+      function pass(message) {
+        output.push("PASS: " + message);
+      }
+
+      function fail(message) {
+        output.push("FAIL: " + message);
+      }
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+        pass(message);
+      }
+
+      function row(applicationType, refNo, rowOffset) {
+        return [
+          applicationType,
+          refNo,
+          46175 + rowOffset,
+          46175 + rowOffset,
+          applicationType === "Penyeteman Sekuriti" ? "Principal" : "",
+          "Agreement " + refNo,
+          "Company",
+          "Transferor " + refNo,
+          "200601035342",
+          "Local",
+          "Address 1 " + refNo,
+          "Address 2 " + refNo,
+          "11900",
+          "Bayan Lepas",
+          "Pulau Pinang",
+          "MALAYSIA",
+          "6041234567",
+          "Company",
+          "Transferee " + refNo,
+          "316392h",
+          "Foreign",
+          "Address 1 Buyer " + refNo,
+          "Address 2 Buyer " + refNo,
+          "4782",
+          "St Florian",
+          "Luar Negara",
+          "AUSTRALIA",
+          "43771253110",
+          "10",
+          applicationType === "Penyeteman Am" ? "Agreement information " + refNo : ""
+        ];
+      }
+
+      try {
+        const rows = [
+          [
+            "",
+            "General Information",
+            "",
+            "",
+            "",
+            "",
+            "Transferor",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Transferee",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Instrument Information",
+            ""
+          ],
+          [
+            "Application Type",
+            "Applicant Reference Number",
+            "Instrument Date",
+            "Date Instrument Received in Malaysia",
+            "Principal / Subsidiary",
+            "Type of Instrument Others/Agreement Title",
+            "Party Type",
+            "Name",
+            "Company Registration Number ",
+            "Business Type",
+            "Address Line 1",
+            "Address Line 2",
+            "Postcode",
+            "City",
+            "State",
+            "Country",
+            "Tel Number",
+            "Party Type",
+            "Name",
+            "Company Registration Number ",
+            "Business Type",
+            "Address Line 1",
+            "Address Line 2",
+            "Postcode",
+            "City",
+            "State",
+            "Country",
+            "Tel Number",
+            "Payment/Consideration Amount",
+            "Agreement Information"
+          ],
+          row("Penyeteman Am", "ONE-XML-001", 0),
+          row("Penyeteman Sekuriti", "ONE-XML-002", 1),
+          row("Penyeteman Am", "ONE-XML-003", 2)
+        ];
+
+        const conversion = window.EDutiXlsxConverter._test.convertXlsxRows(rows, "44");
+        assert(conversion.submissions.length === 3, "three XLSX data rows produce three submissions");
+
+        conversion.submissions.forEach(function (submission, index) {
+          submission.attachments.push({
+            name: "attachment-" + (index + 1) + ".pdf",
+            base64: "QUJD",
+            size: 3,
+            type: "application/pdf"
+          });
+          window.EDutiXlsxConverter.validateSubmission(submission);
+          assert(submission.status === "valid", "submission " + (index + 1) + " validates with attachment");
+        });
+
+        const outputs = window.EDutiXlsxConverter.batch_insturment_1xml(conversion.submissions);
+        assert(outputs.length === 2, "mixed XLSX rows produce two grouped XML outputs");
+        assert(outputs[0].applicationType === "43", "grouped outputs are sorted with application type 43 first");
+        assert(outputs[1].applicationType === "44", "grouped outputs include application type 44 second");
+
+        const type43Doc = new DOMParser().parseFromString(outputs[0].xml, "application/xml");
+        assert(type43Doc.querySelectorAll("parsererror").length === 0, "type 43 XML is well formed");
+        assert(type43Doc.querySelector("bulkstamping > applicationType").textContent === "43", "type 43 XML applicationType is 43");
+        assert(type43Doc.querySelectorAll("bulkstamping > instrument").length === 1, "type 43 XML has one instrument");
+        assert(type43Doc.querySelector("instrument > refNo").textContent === "ONE-XML-002", "type 43 XML contains the security row");
+
+        const type44Doc = new DOMParser().parseFromString(outputs[1].xml, "application/xml");
+        assert(type44Doc.querySelectorAll("parsererror").length === 0, "type 44 XML is well formed");
+        assert(type44Doc.querySelector("bulkstamping > applicationType").textContent === "44", "type 44 XML applicationType is 44");
+        assert(type44Doc.querySelectorAll("bulkstamping > instrument").length === 2, "type 44 XML has two instruments");
+        assert(Array.from(type44Doc.querySelectorAll("instrument > refNo")).map((node) => node.textContent).join(",") === "ONE-XML-001,ONE-XML-003", "type 44 XML contains the general rows");
+        assert(type44Doc.querySelectorAll("bulkstamping bulkstamping").length === 0, "grouped XML has no nested bulkstamping nodes");
+
+        const zipResult = await window.EDutiBatchTestHooks.buildBatchInstrumentOneXmlZipBlob(outputs);
+        const names = Object.keys(zipResult.entries).sort();
+        assert(names.length === 2, "grouped XML ZIP contains two XML files");
+        assert(names.some((name) => name.includes("type_43")), "grouped XML ZIP contains type 43 file");
+        assert(names.some((name) => name.includes("type_44")), "grouped XML ZIP contains type 44 file");
+      } catch (error) {
+        fail(error.stack || error.message || String(error));
+      }
+
+      document.getElementById("results").textContent = output.join("\n");
+    });
+  </script>
+</body>
+</html>
