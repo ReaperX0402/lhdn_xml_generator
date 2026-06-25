@@ -485,6 +485,7 @@
       batchValidateBtn: document.getElementById("batchValidateBtn"),
       batchAssignAttachmentsBtn: document.getElementById("batchAssignAttachmentsBtn"),
       batchGenerateBtn: document.getElementById("batchGenerateBtn"),
+      batchInstrumentOneXmlBtn: document.getElementById("batchInstrumentOneXmlBtn"),
       batchClearBtn: document.getElementById("batchClearBtn"),
       viewBatchGuideBtn: document.getElementById("viewBatchGuideBtn"),
       batchSummary: document.getElementById("batchSummary"),
@@ -514,6 +515,7 @@
     batchEls.batchValidateBtn.addEventListener("click", handleBatchValidate);
     batchEls.batchAssignAttachmentsBtn.addEventListener("click", handleBatchAssignAttachments);
     batchEls.batchGenerateBtn.addEventListener("click", handleBatchGenerate);
+    batchEls.batchInstrumentOneXmlBtn.addEventListener("click", handleBatchInstrumentOneXml);
     batchEls.batchClearBtn.addEventListener("click", handleBatchClear);
     batchEls.viewBatchGuideBtn.addEventListener("click", handleViewBatchGuide);
     
@@ -558,6 +560,7 @@
     batchEls.batchValidateBtn.disabled = false;
     batchEls.batchAssignAttachmentsBtn.disabled = true;
     batchEls.batchGenerateBtn.disabled = true;
+    batchEls.batchInstrumentOneXmlBtn.disabled = true;
     
     // Clear previous results
     batchEls.batchSummary.style.display = "none";
@@ -608,6 +611,7 @@
       batchEls.batchResultsTable.style.display = "block";
       batchEls.batchAssignAttachmentsBtn.disabled = false;
       batchEls.batchClearBtn.disabled = false;
+      updateBatchGenerationButtons();
       
       showToast(`XLSX validated. ${submissions.length} submissions found.`, "success");
     } catch (error) {
@@ -680,6 +684,7 @@
         renderBatchAttachmentModal();
         updateBatchResultsTable();
         updateBatchSummary();
+        updateBatchGenerationButtons();
       });
     });
   }
@@ -715,6 +720,7 @@
     renderBatchAttachmentModal();
     updateBatchResultsTable();
     updateBatchSummary();
+    updateBatchGenerationButtons();
     input.value = "";
   }
 
@@ -739,10 +745,10 @@
     closeBatchAttachmentModal();
     updateBatchResultsTable();
     updateBatchSummary();
+    updateBatchGenerationButtons();
     
     const readyCount = batchState.submissions.filter((s) => s.status === "valid").length;
     if (readyCount > 0) {
-      batchEls.batchGenerateBtn.disabled = false;
       showToast(`Attachments saved. ${readyCount} submission(s) ready for XML generation.`, "success");
     } else {
       showToast("No submissions are ready yet. Check errors or add attachments.", "warning");
@@ -751,6 +757,13 @@
 
   function closeBatchAttachmentModal() {
     batchEls.batchAttachmentModal.style.display = "none";
+  }
+
+  function updateBatchGenerationButtons() {
+    const readyCount = batchState.submissions.filter((s) => s.status === "valid").length;
+    const disabled = readyCount === 0;
+    batchEls.batchGenerateBtn.disabled = disabled;
+    batchEls.batchInstrumentOneXmlBtn.disabled = disabled;
   }
 
   function handleBatchGenerate() {
@@ -794,6 +807,36 @@
     showToast("Batch XML generation complete. Downloading...", "success");
   }
 
+  async function handleBatchInstrumentOneXml() {
+    const readySubmissions = batchState.submissions.filter((s) => s.status === "valid");
+    if (readySubmissions.length === 0) {
+      showToast("No valid submissions with attachments to generate.", "error");
+      return;
+    }
+
+    clearBatchMessages();
+    showBatchMessage("Generating one bulkstamping XML with multiple instruments...", "info");
+
+    try {
+      const outputs = window.EDutiXlsxConverter.batch_insturment_1xml(readySubmissions);
+      let downloaded = false;
+      if (outputs.length === 1) {
+        downloaded = downloadBatchInstrumentOneXml(outputs[0]);
+      } else {
+        downloaded = await downloadBatchInstrumentOneXmlZip(outputs);
+      }
+      if (!downloaded) return;
+
+      const skippedCount = batchState.submissions.length - readySubmissions.length;
+      const message = `${outputs.length} grouped bulkstamping XML file(s) generated with ${readySubmissions.length} instrument(s).${skippedCount > 0 ? ` ${skippedCount} rows skipped.` : ""}`;
+      showBatchMessage(message, "success");
+      showToast("Grouped batch instrument XML generated. Downloading...", "success");
+    } catch (error) {
+      showBatchMessage(`Failed to generate combined XML: ${error.message}`, "error");
+      showToast("Combined XML generation failed.", "error");
+    }
+  }
+
   function downloadSingleBatchXml(submission) {
     const filename = window.EDutiXlsxConverter.generateXmlFilename(submission);
     const blob = new Blob([submission.xml], { type: "application/xml;charset=utf-8" });
@@ -805,6 +848,58 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    return true;
+  }
+
+  function downloadBatchInstrumentOneXml(output) {
+    const timestamp = new Date();
+    const blob = new Blob([output.xml], { type: "application/xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = window.EDutiXlsxConverter.generateBatchInstrumentXmlFilename(output.applicationType, timestamp);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function buildBatchInstrumentOneXmlZipBlob(outputs) {
+    if (!window.JSZip) {
+      throw new Error("ZIP library not available. Cannot create ZIP file.");
+    }
+
+    const zip = new window.JSZip();
+    const timestamp = new Date();
+    outputs.forEach((output) => {
+      const filename = window.EDutiXlsxConverter.generateBatchInstrumentXmlFilename(output.applicationType, timestamp);
+      zip.file(filename, output.xml);
+    });
+
+    return zip.generateAsync({ type: "blob" });
+  }
+
+  async function downloadBatchInstrumentOneXmlZip(outputs) {
+    if (!window.JSZip) {
+      showBatchMessage("ZIP library not available. Cannot create ZIP file.", "error");
+      return false;
+    }
+
+    try {
+      const blob = await buildBatchInstrumentOneXmlZipBlob(outputs);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = window.EDutiXlsxConverter.generateBatchInstrumentZipFilename();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    } catch (error) {
+      showBatchMessage(`Failed to create grouped XML ZIP: ${error.message}`, "error");
+      return false;
+    }
   }
 
   function sanitizeBatchFilename(filename, fallback) {
@@ -874,6 +969,7 @@
     batchEls.batchValidateBtn.disabled = true;
     batchEls.batchAssignAttachmentsBtn.disabled = true;
     batchEls.batchGenerateBtn.disabled = true;
+    batchEls.batchInstrumentOneXmlBtn.disabled = true;
     batchEls.batchClearBtn.disabled = true;
     
     showToast("Batch data cleared.", "info");
@@ -976,9 +1072,9 @@
   }
 
   window.EDutiBatchTestHooks = {
+    downloadBatchInstrumentOneXml,
+    buildBatchInstrumentOneXmlZipBlob,
     buildBatchZipBlob,
     sanitizeBatchFilename
   };
 })();
-
-
